@@ -827,6 +827,35 @@ namespace Guardian.Tests
             await syncService.ExecuteCommandLocallyAsync(cmdRefresh);
             Assert.Equal(CommandStatus.Executed, _db.GetRemoteCommand(cmdRefresh.Id)?.Status);
         }
+
+        [Fact]
+        public void Test35_UserAccountUnique_And_DeviceAccountLinking()
+        {
+            var authService = new AuthenticationService(_db);
+
+            string user = $"unique_child_{Guid.NewGuid():N}";
+            string pass = "StrongPassword123";
+
+            var created = authService.RegisterUser(user, pass, UserRole.Parent);
+            Assert.NotNull(created);
+            Assert.Equal(user, created.Username);
+
+            // Verifying duplicate username registration throws exception
+            Assert.Throws<InvalidOperationException>(() => authService.RegisterUser(user, "AnotherPass"));
+
+            // Verify authentication works
+            var verified = authService.VerifyUserCredentials(user, pass);
+            Assert.NotNull(verified);
+            Assert.Equal(created.Id, verified.Id);
+
+            // Save settings linked web account
+            var settings = _db.LoadSettings();
+            settings.LinkedWebUsername = user;
+            _db.SaveSettings(settings);
+
+            var reloaded = _db.LoadSettings();
+            Assert.Equal(user, reloaded.LinkedWebUsername);
+        }
     }
 }
 

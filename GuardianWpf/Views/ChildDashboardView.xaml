@@ -48,6 +48,59 @@
                 </Border>
             </Grid>
 
+            <!-- Web Dashboard Account Connection Card -->
+            <Border Style="{StaticResource CardBorderStyle}" Margin="0,0,0,24" Background="{StaticResource SurfaceDarkBrush}">
+                <StackPanel>
+                    <Grid Margin="0,0,0,12">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="🌐 Link Device to Guardian Web Account" FontSize="16" FontWeight="Bold" Foreground="White"/>
+                        </StackPanel>
+                        <Border x:Name="ChildAccountStatusBadge" Background="#1E293B" CornerRadius="6" Padding="10,4" HorizontalAlignment="Right" VerticalAlignment="Center">
+                            <TextBlock x:Name="ChildAccountBadgeText" Text="Not Linked" FontSize="11" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}"/>
+                        </Border>
+                    </Grid>
+
+                    <TextBlock Text="Choose a unique Username and Password below to link this device. This username and password will be used on the Web Dashboard (https://guardian-parent-server.onrender.com) to log in and control this device remotely." FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,0,0,16"/>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="12"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="12"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="12"/>
+                            <ColumnDefinition Width="140"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Username -->
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="USERNAME" FontSize="11" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,4"/>
+                            <TextBox x:Name="ChildAccountUsernameBox" Height="36" Padding="10,6" Background="#1E293B" Foreground="White" BorderBrush="{StaticResource BorderDarkBrush}" BorderThickness="1"/>
+                        </StackPanel>
+
+                        <!-- Password -->
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="PASSWORD" FontSize="11" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,4"/>
+                            <PasswordBox x:Name="ChildAccountPasswordBox" Height="36" Padding="10,6" Background="#1E293B" Foreground="White" BorderBrush="{StaticResource BorderDarkBrush}" BorderThickness="1"/>
+                        </StackPanel>
+
+                        <!-- Confirm Password -->
+                        <StackPanel Grid.Column="4">
+                            <TextBlock Text="CONFIRM PASSWORD" FontSize="11" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,4"/>
+                            <PasswordBox x:Name="ChildAccountConfirmPasswordBox" Height="36" Padding="10,6" Background="#1E293B" Foreground="White" BorderBrush="{StaticResource BorderDarkBrush}" BorderThickness="1"/>
+                        </StackPanel>
+
+                        <!-- Action Button -->
+                        <StackPanel Grid.Column="6" VerticalAlignment="Bottom">
+                            <Button x:Name="SaveChildAccountBtn" Content="Save &amp; Connect" Style="{StaticResource PrimaryButtonStyle}" Height="36" Padding="12,0" Click="SaveChildAccount_Click"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <TextBlock x:Name="ChildAccountStatusText" Text="" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource SuccessGreenBrush}" Margin="0,12,0,0" TextWrapping="Wrap" Visibility="Collapsed"/>
+                </StackPanel>
+            </Border>
+
             <!-- Application Limits Breakdown -->
             <Border Style="{StaticResource CardBorderStyle}" Margin="0,0,0,24">
                 <StackPanel>

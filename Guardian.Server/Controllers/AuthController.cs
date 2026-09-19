@@ -33,6 +33,14 @@ namespace Guardian.Server.Controllers
         public int DailyLimitMinutes { get; set; } = 120;
     }
 
+    public class RegisterDeviceAccountRequest
+    {
+        public string Username { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+        public string DeviceId { get; set; } = string.Empty;
+        public string DeviceName { get; set; } = string.Empty;
+    }
+
     public class LoginResponse
     {
         public bool Success { get; set; }
@@ -76,6 +84,72 @@ namespace Guardian.Server.Controllers
             {
                 return BadRequest(new { success = false, message = ex.Message });
             }
+        }
+
+        [HttpPost("register-device-account")]
+        public IActionResult RegisterDeviceAccount([FromBody] RegisterDeviceAccountRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
+            {
+                return BadRequest(new { success = false, message = "Username and password are required." });
+            }
+
+            if (request.Password.Trim().Length < 4)
+            {
+                return BadRequest(new { success = false, message = "Password must be at least 4 characters long." });
+            }
+
+            string cleanUsername = request.Username.Trim();
+            var existingUser = _db.GetUserByUsername(cleanUsername);
+
+            UserAccount user;
+            if (existingUser != null)
+            {
+                var verified = _authService.VerifyUserCredentials(cleanUsername, request.Password);
+                if (verified == null)
+                {
+                    return BadRequest(new { success = false, message = $"Username '{cleanUsername}' is already taken. Please choose a unique username." });
+                }
+                user = verified;
+            }
+            else
+            {
+                try
+                {
+                    user = _authService.RegisterUser(cleanUsername, request.Password, UserRole.Parent);
+                }
+                catch (Exception ex)
+                {
+                    return BadRequest(new { success = false, message = ex.Message });
+                }
+            }
+
+            string deviceId = string.IsNullOrWhiteSpace(request.DeviceId) ? Environment.MachineName : request.DeviceId.Trim();
+            string deviceName = string.IsNullOrWhiteSpace(request.DeviceName) ? deviceId : request.DeviceName.Trim();
+
+            var deviceStatus = _db.GetDeviceStatus(deviceId) ?? new DeviceStatusRecord
+            {
+                DeviceId = deviceId,
+                DeviceName = deviceName,
+                IsOnline = true,
+                LastSeen = DateTime.UtcNow
+            };
+
+            deviceStatus.ParentId = user.Id;
+            _db.SaveDeviceStatus(deviceStatus);
+
+            _db.LogIncident("DEVICE_ACCOUNT_LINKED", user.Username, $"Linked device '{deviceId}' to user account '{user.Username}'.");
+
+            string token = GenerateJwtToken(user);
+            return Ok(new
+            {
+                success = true,
+                token = token,
+                userId = user.Id,
+                username = user.Username,
+                deviceId = deviceId,
+                message = $"Account '{user.Username}' registered & device connected successfully!"
+            });
         }
 
         [HttpPost("login")]

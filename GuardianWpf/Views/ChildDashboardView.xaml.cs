@@ -37,7 +37,24 @@ namespace GuardianWpf.Views
 
             PopulateChildrenCombo();
             UpdateUI();
+            CheckLinkedWebAccount();
             _usage.OnUsageUpdated += () => Dispatcher.Invoke(UpdateUI);
+        }
+
+        private void CheckLinkedWebAccount()
+        {
+            var settings = _db.LoadSettings();
+            if (!string.IsNullOrWhiteSpace(settings.LinkedWebUsername))
+            {
+                ChildAccountUsernameBox.Text = settings.LinkedWebUsername;
+                ChildAccountStatusBadge.Background = new SolidColorBrush(Color.FromRgb(27, 77, 62));
+                ChildAccountBadgeText.Text = $"Linked: {settings.LinkedWebUsername}";
+                ChildAccountBadgeText.Foreground = new SolidColorBrush(Color.FromRgb(0, 230, 118));
+
+                ChildAccountStatusText.Visibility = Visibility.Visible;
+                ChildAccountStatusText.Foreground = ThemeHelper.GetBrush("SuccessGreenBrush", Brushes.MediumSeaGreen);
+                ChildAccountStatusText.Text = $"✓ Device is connected to account '{settings.LinkedWebUsername}'. Log in at https://guardian-parent-server.onrender.com to manage remotely.";
+            }
         }
 
         private void PopulateChildrenCombo()
@@ -116,6 +133,123 @@ namespace GuardianWpf.Views
             }).ToList();
 
             ChildAppsList.ItemsSource = items;
+        }
+
+        private async void SaveChildAccount_Click(object sender, RoutedEventArgs e)
+        {
+            string username = ChildAccountUsernameBox.Text.Trim();
+            string password = ChildAccountPasswordBox.Password.Trim();
+            string confirm = ChildAccountConfirmPasswordBox.Password.Trim();
+
+            ChildAccountStatusText.Visibility = Visibility.Visible;
+
+            if (string.IsNullOrWhiteSpace(username))
+            {
+                ChildAccountStatusText.Foreground = ThemeHelper.GetBrush("DangerRedBrush", Brushes.Crimson);
+                ChildAccountStatusText.Text = "❌ Please enter a username.";
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(password) || password.Length < 4)
+            {
+                ChildAccountStatusText.Foreground = ThemeHelper.GetBrush("DangerRedBrush", Brushes.Crimson);
+                ChildAccountStatusText.Text = "❌ Password must be at least 4 characters long.";
+                return;
+            }
+
+            if (password != confirm)
+            {
+                ChildAccountStatusText.Foreground = ThemeHelper.GetBrush("DangerRedBrush", Brushes.Crimson);
+                ChildAccountStatusText.Text = "❌ Password and Confirm Password do not match.";
+                return;
+            }
+
+            SaveChildAccountBtn.IsEnabled = false;
+            ChildAccountStatusText.Foreground = ThemeHelper.GetBrush("AccentBlueBrush", Brushes.DodgerBlue);
+            ChildAccountStatusText.Text = "⏳ Registering web account & connecting device...";
+
+            var settings = _db.LoadSettings();
+            string deviceId = string.IsNullOrWhiteSpace(settings.DeviceId) ? $"gdev_{Guid.NewGuid():N}"[..17] : settings.DeviceId;
+
+            try
+            {
+                using var client = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+                var payload = new
+                {
+                    username,
+                    password,
+                    deviceId,
+                    deviceName = Environment.MachineName
+                };
+
+                string[] serverUrls = new[]
+                {
+                    "https://guardian-parent-server.onrender.com/api/auth/register-device-account",
+                    "http://localhost:5000/api/auth/register-device-account"
+                };
+
+                bool registered = false;
+                string serverMessage = "";
+
+                foreach (var url in serverUrls)
+                {
+                    try
+                    {
+                        var response = await client.PostAsJsonAsync(url, payload);
+                        var responseContent = await response.Content.ReadAsStringAsync();
+                        using var doc = System.Text.Json.JsonDocument.Parse(responseContent);
+                        var root = doc.RootElement;
+                        bool success = root.TryGetProperty("success", out var sProp) && sProp.GetBoolean();
+                        string msg = root.TryGetProperty("message", out var mProp) ? mProp.GetString() ?? "" : "";
+
+                        if (response.IsSuccessStatusCode && success)
+                        {
+                            registered = true;
+                            serverMessage = msg;
+                            break;
+                        }
+                        else
+                        {
+                            serverMessage = !string.IsNullOrEmpty(msg) ? msg : "Registration failed.";
+                            if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
+                            {
+                                break;
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        // Try next URL
+                    }
+                }
+
+                if (registered)
+                {
+                    settings.LinkedWebUsername = username;
+                    _db.SaveSettings(settings);
+
+                    ChildAccountStatusBadge.Background = new SolidColorBrush(Color.FromRgb(27, 77, 62));
+                    ChildAccountBadgeText.Text = $"Linked: {username}";
+                    ChildAccountBadgeText.Foreground = new SolidColorBrush(Color.FromRgb(0, 230, 118));
+
+                    ChildAccountStatusText.Foreground = ThemeHelper.GetBrush("SuccessGreenBrush", Brushes.MediumSeaGreen);
+                    ChildAccountStatusText.Text = $"✓ {serverMessage} Use username '{username}' and your password to log in at https://guardian-parent-server.onrender.com";
+                }
+                else
+                {
+                    ChildAccountStatusText.Foreground = ThemeHelper.GetBrush("DangerRedBrush", Brushes.Crimson);
+                    ChildAccountStatusText.Text = $"❌ {(!string.IsNullOrEmpty(serverMessage) ? serverMessage : "Unable to reach Guardian Web Server. Check internet connection.")}";
+                }
+            }
+            catch (Exception ex)
+            {
+                ChildAccountStatusText.Foreground = ThemeHelper.GetBrush("DangerRedBrush", Brushes.Crimson);
+                ChildAccountStatusText.Text = $"❌ Connection error: {ex.Message}";
+            }
+            finally
+            {
+                SaveChildAccountBtn.IsEnabled = true;
+            }
         }
 
         private void RequestTime_Click(object sender, RoutedEventArgs e)

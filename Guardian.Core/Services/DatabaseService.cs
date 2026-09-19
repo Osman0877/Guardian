@@ -510,6 +510,7 @@ namespace Guardian.Core.Services
                         case "WebProtectionEnabled": s.WebProtectionEnabled = val == "1" || val.Equals("true", StringComparison.OrdinalIgnoreCase); break;
                         case "BedtimeLockEnabled": s.BedtimeLockEnabled = val == "1" || val.Equals("true", StringComparison.OrdinalIgnoreCase); break;
                         case "DarkTheme": s.DarkTheme = val == "1" || val.Equals("true", StringComparison.OrdinalIgnoreCase); break;
+                        case "LinkedWebUsername": s.LinkedWebUsername = val; break;
                     }
                 }
 
@@ -538,7 +539,8 @@ namespace Guardian.Core.Services
                     { "MinimizeToTrayOnClose", s.MinimizeToTrayOnClose ? "1" : "0" },
                     { "WebProtectionEnabled", s.WebProtectionEnabled ? "1" : "0" },
                     { "BedtimeLockEnabled", s.BedtimeLockEnabled ? "1" : "0" },
-                    { "DarkTheme", s.DarkTheme ? "1" : "0" }
+                    { "DarkTheme", s.DarkTheme ? "1" : "0" },
+                    { "LinkedWebUsername", s.LinkedWebUsername ?? "" }
                 };
 
                 foreach (var kvp in dict)
@@ -1748,6 +1750,62 @@ namespace Guardian.Core.Services
             };
         }
 
+        private void EnsureUserAccountsTablesExist(SqliteConnection conn)
+        {
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = @"
+                CREATE TABLE IF NOT EXISTS UserAccounts (
+                    id TEXT PRIMARY KEY,
+                    username TEXT NOT NULL,
+                    normalized_username TEXT NOT NULL UNIQUE,
+                    password_hash TEXT NOT NULL,
+                    password_salt TEXT NOT NULL,
+                    role TEXT NOT NULL DEFAULT 'Parent',
+                    parent_id TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL,
+                    is_active INTEGER NOT NULL DEFAULT 1
+                );
+                CREATE TABLE IF NOT EXISTS user_accounts (
+                    id TEXT PRIMARY KEY,
+                    username TEXT NOT NULL,
+                    normalized_username TEXT NOT NULL UNIQUE,
+                    password_hash TEXT NOT NULL,
+                    password_salt TEXT NOT NULL,
+                    role TEXT NOT NULL DEFAULT 'Parent',
+                    parent_id TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL,
+                    is_active INTEGER NOT NULL DEFAULT 1
+                );
+            ";
+            try { cmd.ExecuteNonQuery(); } catch { }
+
+            string[] tables = new[] { "UserAccounts", "user_accounts" };
+            foreach (var tbl in tables)
+            {
+                var cols = new[]
+                {
+                    ("normalized_username", "TEXT NOT NULL DEFAULT ''"),
+                    ("password_hash", "TEXT NOT NULL DEFAULT ''"),
+                    ("password_salt", "TEXT NOT NULL DEFAULT ''"),
+                    ("role", "TEXT NOT NULL DEFAULT 'Parent'"),
+                    ("parent_id", "TEXT NOT NULL DEFAULT ''"),
+                    ("created_at", "TEXT NOT NULL DEFAULT ''"),
+                    ("is_active", "INTEGER NOT NULL DEFAULT 1")
+                };
+
+                foreach (var (col, colDef) in cols)
+                {
+                    try
+                    {
+                        using var alterCmd = conn.CreateCommand();
+                        alterCmd.CommandText = $"ALTER TABLE {tbl} ADD COLUMN {col} {colDef};";
+                        alterCmd.ExecuteNonQuery();
+                    }
+                    catch { /* Column already exists */ }
+                }
+            }
+        }
+
         public UserAccount? GetUserByUsername(string username)
         {
             if (string.IsNullOrWhiteSpace(username)) return null;
@@ -1756,25 +1814,38 @@ namespace Guardian.Core.Services
             {
                 using var conn = new SqliteConnection(_connectionString);
                 conn.Open();
-                using var cmd = conn.CreateCommand();
-                cmd.CommandText = "SELECT id, username, normalized_username, password_hash, password_salt, role, parent_id, created_at, is_active FROM UserAccounts WHERE normalized_username = @norm;";
-                cmd.Parameters.AddWithValue("@norm", norm);
-                using var reader = cmd.ExecuteReader();
-                if (reader.Read())
+                EnsureUserAccountsTablesExist(conn);
+
+                string[] tables = new[] { "UserAccounts", "user_accounts" };
+                foreach (var table in tables)
                 {
-                    Enum.TryParse<UserRole>(reader.GetString(5), true, out var role);
-                    return new UserAccount
+                    try
                     {
-                        Id = reader.GetString(0),
-                        Username = reader.GetString(1),
-                        NormalizedUsername = reader.GetString(2),
-                        PasswordHash = reader.GetString(3),
-                        PasswordSalt = reader.GetString(4),
-                        Role = role,
-                        ParentId = reader.IsDBNull(6) ? "" : reader.GetString(6),
-                        CreatedAt = DateTime.TryParse(reader.GetString(7), out var ca) ? ca : DateTime.UtcNow,
-                        IsActive = reader.GetInt32(8) == 1
-                    };
+                        using var cmd = conn.CreateCommand();
+                        cmd.CommandText = $"SELECT id, username, normalized_username, password_hash, password_salt, role, parent_id, created_at, is_active FROM {table} WHERE normalized_username = @norm OR UPPER(username) = @norm;";
+                        cmd.Parameters.AddWithValue("@norm", norm);
+                        using var reader = cmd.ExecuteReader();
+                        if (reader.Read())
+                        {
+                            Enum.TryParse<UserRole>(reader.GetString(5), true, out var role);
+                            return new UserAccount
+                            {
+                                Id = reader.GetString(0),
+                                Username = reader.GetString(1),
+                                NormalizedUsername = reader.GetString(2),
+                                PasswordHash = reader.GetString(3),
+                                PasswordSalt = reader.GetString(4),
+                                Role = role,
+                                ParentId = reader.IsDBNull(6) ? "" : reader.GetString(6),
+                                CreatedAt = DateTime.TryParse(reader.GetString(7), out var ca) ? ca : DateTime.UtcNow,
+                                IsActive = reader.GetInt32(8) == 1
+                            };
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Error($"GetUserByUsername error on table {table}: {ex.Message}", ex);
+                    }
                 }
             }
             return null;
@@ -1787,25 +1858,38 @@ namespace Guardian.Core.Services
             {
                 using var conn = new SqliteConnection(_connectionString);
                 conn.Open();
-                using var cmd = conn.CreateCommand();
-                cmd.CommandText = "SELECT id, username, normalized_username, password_hash, password_salt, role, parent_id, created_at, is_active FROM UserAccounts WHERE id = @id;";
-                cmd.Parameters.AddWithValue("@id", id);
-                using var reader = cmd.ExecuteReader();
-                if (reader.Read())
+                EnsureUserAccountsTablesExist(conn);
+
+                string[] tables = new[] { "UserAccounts", "user_accounts" };
+                foreach (var table in tables)
                 {
-                    Enum.TryParse<UserRole>(reader.GetString(5), true, out var role);
-                    return new UserAccount
+                    try
                     {
-                        Id = reader.GetString(0),
-                        Username = reader.GetString(1),
-                        NormalizedUsername = reader.GetString(2),
-                        PasswordHash = reader.GetString(3),
-                        PasswordSalt = reader.GetString(4),
-                        Role = role,
-                        ParentId = reader.IsDBNull(6) ? "" : reader.GetString(6),
-                        CreatedAt = DateTime.TryParse(reader.GetString(7), out var ca) ? ca : DateTime.UtcNow,
-                        IsActive = reader.GetInt32(8) == 1
-                    };
+                        using var cmd = conn.CreateCommand();
+                        cmd.CommandText = $"SELECT id, username, normalized_username, password_hash, password_salt, role, parent_id, created_at, is_active FROM {table} WHERE id = @id;";
+                        cmd.Parameters.AddWithValue("@id", id);
+                        using var reader = cmd.ExecuteReader();
+                        if (reader.Read())
+                        {
+                            Enum.TryParse<UserRole>(reader.GetString(5), true, out var role);
+                            return new UserAccount
+                            {
+                                Id = reader.GetString(0),
+                                Username = reader.GetString(1),
+                                NormalizedUsername = reader.GetString(2),
+                                PasswordHash = reader.GetString(3),
+                                PasswordSalt = reader.GetString(4),
+                                Role = role,
+                                ParentId = reader.IsDBNull(6) ? "" : reader.GetString(6),
+                                CreatedAt = DateTime.TryParse(reader.GetString(7), out var ca) ? ca : DateTime.UtcNow,
+                                IsActive = reader.GetInt32(8) == 1
+                            };
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Error($"GetUserById error on table {table}: {ex.Message}", ex);
+                    }
                 }
             }
             return null;
@@ -1813,33 +1897,57 @@ namespace Guardian.Core.Services
 
         public void SaveUserAccount(UserAccount user)
         {
+            if (user == null || string.IsNullOrWhiteSpace(user.Username)) return;
+            string norm = user.Username.Trim().ToUpperInvariant();
+            user.NormalizedUsername = norm;
+
+            // Check if user with this username exists to keep identical Id across updates
+            var existing = GetUserByUsername(user.Username);
+            if (existing != null && existing.Id != user.Id)
+            {
+                user.Id = existing.Id;
+            }
+
             lock (_dbLock)
             {
                 using var conn = new SqliteConnection(_connectionString);
                 conn.Open();
-                using var cmd = conn.CreateCommand();
-                cmd.CommandText = @"
-                    INSERT INTO UserAccounts (id, username, normalized_username, password_hash, password_salt, role, parent_id, created_at, is_active)
-                    VALUES (@id, @user, @norm, @hash, @salt, @role, @parent, @created, @active)
-                    ON CONFLICT(id) DO UPDATE SET
-                        username = excluded.username,
-                        normalized_username = excluded.normalized_username,
-                        password_hash = excluded.password_hash,
-                        password_salt = excluded.password_salt,
-                        role = excluded.role,
-                        parent_id = excluded.parent_id,
-                        is_active = excluded.is_active;
-                ";
-                cmd.Parameters.AddWithValue("@id", user.Id);
-                cmd.Parameters.AddWithValue("@user", user.Username);
-                cmd.Parameters.AddWithValue("@norm", user.Username.Trim().ToUpperInvariant());
-                cmd.Parameters.AddWithValue("@hash", user.PasswordHash);
-                cmd.Parameters.AddWithValue("@salt", user.PasswordSalt);
-                cmd.Parameters.AddWithValue("@role", user.Role.ToString());
-                cmd.Parameters.AddWithValue("@parent", user.ParentId ?? "");
-                cmd.Parameters.AddWithValue("@created", user.CreatedAt.ToString("o"));
-                cmd.Parameters.AddWithValue("@active", user.IsActive ? 1 : 0);
-                cmd.ExecuteNonQuery();
+                EnsureUserAccountsTablesExist(conn);
+
+                string[] tables = new[] { "UserAccounts", "user_accounts" };
+                foreach (var table in tables)
+                {
+                    try
+                    {
+                        using var cmd = conn.CreateCommand();
+                        cmd.CommandText = $@"
+                            INSERT INTO {table} (id, username, normalized_username, password_hash, password_salt, role, parent_id, created_at, is_active)
+                            VALUES (@id, @user, @norm, @hash, @salt, @role, @parent, @created, @active)
+                            ON CONFLICT(id) DO UPDATE SET
+                                username = excluded.username,
+                                normalized_username = excluded.normalized_username,
+                                password_hash = excluded.password_hash,
+                                password_salt = excluded.password_salt,
+                                role = excluded.role,
+                                parent_id = excluded.parent_id,
+                                is_active = excluded.is_active;
+                        ";
+                        cmd.Parameters.AddWithValue("@id", user.Id);
+                        cmd.Parameters.AddWithValue("@user", user.Username.Trim());
+                        cmd.Parameters.AddWithValue("@norm", norm);
+                        cmd.Parameters.AddWithValue("@hash", user.PasswordHash);
+                        cmd.Parameters.AddWithValue("@salt", user.PasswordSalt);
+                        cmd.Parameters.AddWithValue("@role", user.Role.ToString());
+                        cmd.Parameters.AddWithValue("@parent", user.ParentId ?? "");
+                        cmd.Parameters.AddWithValue("@created", user.CreatedAt.ToString("o"));
+                        cmd.Parameters.AddWithValue("@active", user.IsActive ? 1 : 0);
+                        cmd.ExecuteNonQuery();
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Error($"SaveUserAccount error on table {table}: {ex.Message}", ex);
+                    }
+                }
             }
         }
 

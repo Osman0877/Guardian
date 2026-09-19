@@ -213,6 +213,7 @@ namespace Guardian.Core.Models
         public bool WebProtectionEnabled { get; set; } = true;
         public bool BedtimeLockEnabled { get; set; } = true;
         public bool DarkTheme { get; set; } = true;
+        public string LinkedWebUsername { get; set; } = string.Empty;
     }
 
     public enum CommandStatus
