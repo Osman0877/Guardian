@@ -310,6 +310,7 @@ namespace Guardian.Core.Services
                                     Category = "Parent Blocked",
                                     Reason = "Blocked from Remote Dashboard"
                                 });
+                                _enforcement.RefreshRules();
                             }
                         }
                         break;
@@ -320,6 +321,7 @@ namespace Guardian.Core.Services
                             if (!string.IsNullOrWhiteSpace(domain))
                             {
                                 _db.DeleteWebRule(domain);
+                                _enforcement.RefreshRules();
                             }
                         }
                         break;
@@ -345,20 +347,7 @@ namespace Guardian.Core.Services
                     case RemoteCommandType.ActivateAfk:
                     case RemoteCommandType.StartAfk:
                         int duration = root.TryGetProperty("durationMinutes", out var durProp) && durProp.TryGetInt32(out int d) ? d : 60;
-                        _db.SaveAfkState(new AfkState
-                        {
-                            IsAfkModeActive = true,
-                            AfkStartedAt = DateTime.Now,
-                            AfkDurationMinutes = duration,
-                            ActivatedBy = "Parent Remote"
-                        });
-                        _db.SaveAfkSession(new AfkSessionRecord
-                        {
-                            StartTimestamp = DateTime.UtcNow,
-                            ActivationMethod = "Remote Parent Website",
-                            ActivatedBy = "Parent Remote",
-                            EndReason = "Active"
-                        });
+                        _usageTracker.ActivateAfkModeRemotely(duration, "Parent Remote");
                         break;
 
                     case RemoteCommandType.DeactivateAfk:

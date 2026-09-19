@@ -45,6 +45,7 @@ namespace Guardian.Core.Services
         void LockDeviceManually(string reason = "Device locked by parent");
         void UnlockDeviceManually(string reason = "Device unlocked by parent");
         bool ActivateAfkMode(string password, int durationMinutes = 0);
+        void ActivateAfkModeRemotely(int durationMinutes = 60, string activatedBy = "Parent Remote");
         bool DeactivateAfkMode(string password);
         void ForceDeactivateAfkMode(string reason = "AFK Mode ended");
         void RefreshSchedule();
@@ -447,6 +448,43 @@ namespace Guardian.Core.Services
             OnAfkStateChanged?.Invoke();
             OnUsageUpdated?.Invoke();
             return true;
+        }
+
+        public void ActivateAfkModeRemotely(int durationMinutes = 60, string activatedBy = "Parent Remote")
+        {
+            lock (_stateLock)
+            {
+                DateTime nowLocal = DateTime.Now;
+                DateTime nowUtc = DateTime.UtcNow;
+
+                _afkState.IsAfkModeActive = true;
+                _afkState.AfkStartedAt = nowLocal;
+                _afkState.AfkEndedAt = null;
+                _afkState.AfkDurationMinutes = durationMinutes;
+                _afkState.ActivatedBy = activatedBy;
+
+                _db.SaveAfkState(_afkState);
+
+                var session = new AfkSessionRecord
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    StartTimestamp = nowUtc,
+                    EndTimestamp = null,
+                    DurationSeconds = 0,
+                    ActivationMethod = "Remote Parent Dashboard",
+                    ActivatedBy = activatedBy,
+                    EndedBy = "Pending",
+                    EndReason = "Active",
+                    CreatedAt = nowUtc
+                };
+                _db.SaveAfkSession(session);
+            }
+
+            string durText = durationMinutes > 0 ? $"{durationMinutes} minutes" : "Until manually disabled";
+            _db.LogIncident("AFK_MODE_ACTIVATED", activatedBy, $"Remote AFK Mode activated (Duration: {durText}). Screen time accounting paused.");
+            Logger.Info($"Remote AFK Mode activated ({durText}).");
+            OnAfkStateChanged?.Invoke();
+            OnUsageUpdated?.Invoke();
         }
 
         public bool DeactivateAfkMode(string password)

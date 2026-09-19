@@ -38,9 +38,24 @@ namespace Guardian.Server.Controllers
             _hubContext = hubContext;
         }
 
+        private string GetAuthenticatedParentId()
+        {
+            if (User.Identity?.IsAuthenticated == true)
+            {
+                var parentClaim = User.FindFirst("ParentId")?.Value;
+                if (!string.IsNullOrEmpty(parentClaim)) return parentClaim;
+
+                var idClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                if (!string.IsNullOrEmpty(idClaim)) return idClaim;
+            }
+            return string.Empty;
+        }
+
         [HttpPost("create")]
         public async Task<IActionResult> CreateCommand([FromBody] CreateCommandDto dto)
         {
+            string parentId = GetAuthenticatedParentId();
+
             if (!Enum.TryParse<RemoteCommandType>(dto.CommandType, true, out var type))
             {
                 return BadRequest(new { success = false, message = $"Invalid command type: {dto.CommandType}" });
@@ -59,7 +74,7 @@ namespace Guardian.Server.Controllers
                 CommandType = type,
                 PayloadJson = dto.PayloadJson ?? "{}",
                 Status = CommandStatus.Pending,
-                CreatedBy = "Parent Web Dashboard",
+                CreatedBy = string.IsNullOrEmpty(parentId) ? "Parent Web Dashboard" : $"Parent ({parentId})",
                 CreatedAt = DateTime.UtcNow,
                 ExpiresAt = DateTime.UtcNow.AddHours(24)
             };

@@ -758,6 +758,75 @@ namespace Guardian.Tests
             Assert.NotNull(checkedCmd);
             Assert.Equal(CommandStatus.Expired, checkedCmd.Status);
         }
+
+        [Fact]
+        public async System.Threading.Tasks.Task Test33_All_Ten_RemoteCommands_EndToEnd_Execution()
+        {
+            using var usageTracker = new UsageTrackingService(_db);
+            using var enforcement = new EnforcementService(_db, usageTracker);
+            using var syncService = new DeviceSyncService(_db, usageTracker, enforcement);
+            string devId = syncService.DeviceId;
+
+            // 1. LockDevice
+            var cmdLock = new RemoteCommand { Id = Guid.NewGuid().ToString(), DeviceId = devId, CommandType = RemoteCommandType.LockDevice };
+            await syncService.ExecuteCommandLocallyAsync(cmdLock);
+            Assert.Equal(CommandStatus.Executed, _db.GetRemoteCommand(cmdLock.Id)?.Status);
+
+            // 2. UnlockDevice
+            var cmdUnlock = new RemoteCommand { Id = Guid.NewGuid().ToString(), DeviceId = devId, CommandType = RemoteCommandType.UnlockDevice };
+            await syncService.ExecuteCommandLocallyAsync(cmdUnlock);
+            Assert.Equal(CommandStatus.Executed, _db.GetRemoteCommand(cmdUnlock.Id)?.Status);
+
+            // 3. StartAfk
+            var cmdStartAfk = new RemoteCommand { Id = Guid.NewGuid().ToString(), DeviceId = devId, CommandType = RemoteCommandType.StartAfk, PayloadJson = "{\"durationMinutes\":45}" };
+            await syncService.ExecuteCommandLocallyAsync(cmdStartAfk);
+            Assert.Equal(CommandStatus.Executed, _db.GetRemoteCommand(cmdStartAfk.Id)?.Status);
+            Assert.True(usageTracker.IsAfkModeActive);
+
+            // 4. EndAfk
+            var cmdEndAfk = new RemoteCommand { Id = Guid.NewGuid().ToString(), DeviceId = devId, CommandType = RemoteCommandType.EndAfk };
+            await syncService.ExecuteCommandLocallyAsync(cmdEndAfk);
+            Assert.Equal(CommandStatus.Executed, _db.GetRemoteCommand(cmdEndAfk.Id)?.Status);
+            Assert.False(usageTracker.IsAfkModeActive);
+
+            // 5. BlockApplication
+            var cmdBlockApp = new RemoteCommand { Id = Guid.NewGuid().ToString(), DeviceId = devId, CommandType = RemoteCommandType.BlockApplication, PayloadJson = "{\"processName\":\"testgame.exe\",\"displayName\":\"Test Game\"}" };
+            await syncService.ExecuteCommandLocallyAsync(cmdBlockApp);
+            Assert.Equal(CommandStatus.Executed, _db.GetRemoteCommand(cmdBlockApp.Id)?.Status);
+            var appRules = _db.GetAllAppRules();
+            Assert.Contains(appRules, r => r.ProcessName == "testgame.exe" && r.IsBlocked);
+
+            // 6. UnblockApplication
+            var cmdUnblockApp = new RemoteCommand { Id = Guid.NewGuid().ToString(), DeviceId = devId, CommandType = RemoteCommandType.UnblockApplication, PayloadJson = "{\"processName\":\"testgame.exe\"}" };
+            await syncService.ExecuteCommandLocallyAsync(cmdUnblockApp);
+            Assert.Equal(CommandStatus.Executed, _db.GetRemoteCommand(cmdUnblockApp.Id)?.Status);
+            Assert.DoesNotContain(_db.GetAllAppRules(), r => r.ProcessName == "testgame.exe");
+
+            // 7. BlockWebsite
+            var cmdBlockWeb = new RemoteCommand { Id = Guid.NewGuid().ToString(), DeviceId = devId, CommandType = RemoteCommandType.BlockWebsite, PayloadJson = "{\"domain\":\"badsite.com\"}" };
+            await syncService.ExecuteCommandLocallyAsync(cmdBlockWeb);
+            Assert.Equal(CommandStatus.Executed, _db.GetRemoteCommand(cmdBlockWeb.Id)?.Status);
+            Assert.Contains(_db.GetWebRules(), w => w.Domain == "badsite.com" && w.IsBlocked);
+
+            // 8. UnblockWebsite
+            var cmdUnblockWeb = new RemoteCommand { Id = Guid.NewGuid().ToString(), DeviceId = devId, CommandType = RemoteCommandType.UnblockWebsite, PayloadJson = "{\"domain\":\"badsite.com\"}" };
+            await syncService.ExecuteCommandLocallyAsync(cmdUnblockWeb);
+            Assert.Equal(CommandStatus.Executed, _db.GetRemoteCommand(cmdUnblockWeb.Id)?.Status);
+            Assert.DoesNotContain(_db.GetWebRules(), w => w.Domain == "badsite.com");
+
+            // 9. AddTime
+            long secondsBefore = _db.GetOrCreateDailyUsage(DateTime.Today, "default").ManualBonusSeconds;
+            var cmdAddTime = new RemoteCommand { Id = Guid.NewGuid().ToString(), DeviceId = devId, CommandType = RemoteCommandType.AddTime, PayloadJson = "{\"minutes\":30}" };
+            await syncService.ExecuteCommandLocallyAsync(cmdAddTime);
+            Assert.Equal(CommandStatus.Executed, _db.GetRemoteCommand(cmdAddTime.Id)?.Status);
+            long secondsAfter = _db.GetOrCreateDailyUsage(DateTime.Today, "default").ManualBonusSeconds;
+            Assert.Equal(secondsBefore + 1800, secondsAfter);
+
+            // 10. RefreshPolicy
+            var cmdRefresh = new RemoteCommand { Id = Guid.NewGuid().ToString(), DeviceId = devId, CommandType = RemoteCommandType.RefreshPolicy };
+            await syncService.ExecuteCommandLocallyAsync(cmdRefresh);
+            Assert.Equal(CommandStatus.Executed, _db.GetRemoteCommand(cmdRefresh.Id)?.Status);
+        }
     }
 }
 

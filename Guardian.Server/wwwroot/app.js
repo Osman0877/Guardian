@@ -308,6 +308,17 @@ async function triggerRemoteUnlock() {
     }
 }
 
+async function triggerRefreshPolicy() {
+    if (activeDevicesList.length === 0) {
+        alert('No registered device connected to send Refresh Policy command.');
+        return;
+    }
+    const res = await sendRemoteCommand('RefreshPolicy', {});
+    if (res.success) {
+        showToast('✓ Policy refresh command queued for child device!');
+    }
+}
+
 function toggleRemoteAfkModal() {
     if (activeDevicesList.length === 0) {
         alert('No registered device connected to send AFK command.');
