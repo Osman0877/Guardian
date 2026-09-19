@@ -314,6 +314,7 @@ namespace Guardian.Core.Services
             {
                 _currentRecord.ManualBonusSeconds += (minutes * 60L);
                 _currentRecord.IsDeviceLocked = false;
+                _currentRecord.ParentUnlockedForToday = true;
                 _currentRecord.LockReason = "";
                 _db.SaveDailyUsage(_currentRecord);
             }

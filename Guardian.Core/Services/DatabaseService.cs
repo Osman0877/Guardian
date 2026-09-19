@@ -71,6 +71,7 @@ namespace Guardian.Core.Services
         // User Accounts & Parent/Child Relationships
         UserAccount? GetUserByUsername(string username);
         UserAccount? GetUserById(string id);
+        List<UserAccount> GetAllUserAccounts();
         void SaveUserAccount(UserAccount user);
         List<ChildProfile> GetChildrenForParent(string parentId);
         List<DeviceStatusRecord> GetDevicesForParent(string parentId);
@@ -1925,6 +1926,50 @@ namespace Guardian.Core.Services
                 }
             }
             return null;
+        }
+
+        public List<UserAccount> GetAllUserAccounts()
+        {
+            var list = new List<UserAccount>();
+            lock (_dbLock)
+            {
+                using var conn = new SqliteConnection(_connectionString);
+                conn.Open();
+                EnsureUserAccountsTablesExist(conn);
+
+                string[] tables = new[] { "UserAccounts", "user_accounts" };
+                foreach (var table in tables)
+                {
+                    try
+                    {
+                        using var cmd = conn.CreateCommand();
+                        cmd.CommandText = $"SELECT id, username, normalized_username, password_hash, password_salt, role, parent_id, created_at, is_active FROM {table};";
+                        using var reader = cmd.ExecuteReader();
+                        while (reader.Read())
+                        {
+                            Enum.TryParse<UserRole>(reader.GetString(5), true, out var role);
+                            var acc = new UserAccount
+                            {
+                                Id = reader.GetString(0),
+                                Username = reader.GetString(1),
+                                NormalizedUsername = reader.GetString(2),
+                                PasswordHash = reader.GetString(3),
+                                PasswordSalt = reader.GetString(4),
+                                Role = role,
+                                ParentId = reader.IsDBNull(6) ? "" : reader.GetString(6),
+                                CreatedAt = DateTime.TryParse(reader.GetString(7), out var ca) ? ca : DateTime.UtcNow,
+                                IsActive = reader.GetInt32(8) == 1
+                            };
+                            if (!list.Exists(u => u.Id == acc.Id || u.NormalizedUsername == acc.NormalizedUsername))
+                            {
+                                list.Add(acc);
+                            }
+                        }
+                    }
+                    catch { }
+                }
+            }
+            return list;
         }
 
         public void SaveUserAccount(UserAccount user)

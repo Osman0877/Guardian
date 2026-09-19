@@ -188,8 +188,10 @@ namespace GuardianWpf.Views
             {
                 _auth.AuthenticateAndStartSession(pwd);
                 _usage.UnlockDeviceForToday();
+                RemoveKeyboardHook();
+                _guardTimer.Stop();
                 OnUnlocked?.Invoke();
-                Hide();
+                Close();
             }
             else
             {
@@ -208,8 +210,10 @@ namespace GuardianWpf.Views
                 _auth.AuthenticateAndStartSession(pwd);
                 _usage.GrantBonusMinutes(minutes);
                 _db.LogIncident("PARENT_UNLOCK_GRANTED", "Parent", $"Parent granted +{minutes}m extension.");
+                RemoveKeyboardHook();
+                _guardTimer.Stop();
                 OnUnlocked?.Invoke();
-                Hide();
+                Close();
             }
             else
             {
@@ -224,7 +228,7 @@ namespace GuardianWpf.Views
         {
             if (e.Key == Key.Enter)
             {
-                TryGrantTime(30); // Default to +30m on Enter
+                GrantRestOfDay_Click(sender, e);
             }
         }
     }

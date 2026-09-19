@@ -126,19 +126,52 @@ namespace Guardian.Core.Services
         {
             if (string.IsNullOrEmpty(password)) return false;
 
+            // 1. Check local settings password hash/salt
             try
             {
                 byte[] salt = Convert.FromBase64String(_settings.PasswordSalt);
                 byte[] expectedHash = Convert.FromBase64String(_settings.PasswordHash);
                 byte[] actualHash = HashPassword(password, salt);
 
-                return CryptographicOperations.FixedTimeEquals(actualHash, expectedHash);
+                if (CryptographicOperations.FixedTimeEquals(actualHash, expectedHash))
+                {
+                    return true;
+                }
+            }
+            catch { }
+
+            // 2. Check LinkedWebUsername if set
+            try
+            {
+                if (!string.IsNullOrEmpty(_settings.LinkedWebUsername))
+                {
+                    var linkedUser = VerifyUserCredentials(_settings.LinkedWebUsername, password);
+                    if (linkedUser != null && linkedUser.Role == UserRole.Parent)
+                    {
+                        return true;
+                    }
+                }
+
+                // 3. Check any registered parent accounts in database
+                var allUsers = _db.GetAllUserAccounts();
+                foreach (var u in allUsers)
+                {
+                    if (u.Role == UserRole.Parent)
+                    {
+                        var verified = VerifyUserCredentials(u.Username, password);
+                        if (verified != null)
+                        {
+                            return true;
+                        }
+                    }
+                }
             }
             catch (Exception ex)
             {
-                Logger.Error("Error during password verification", ex);
-                return false;
+                Logger.Error("Error during fallback parent password verification", ex);
             }
+
+            return false;
         }
 
         public bool AuthenticateAndStartSession(string password)
