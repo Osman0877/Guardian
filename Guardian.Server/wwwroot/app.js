@@ -144,6 +144,7 @@ function initSignalR() {
 async function loadDashboardData() {
     fetchChildrenAndDevices();
     fetchInvitations();
+    fetchSchedules();
     fetchAppRules();
     fetchWebRules();
     fetchTimeRequests();
@@ -738,4 +739,174 @@ function showToast(msg) {
     banner.innerText = msg;
     banner.style.display = 'block';
     setTimeout(() => { banner.style.display = 'none'; }, 4000);
+}
+
+let currentSchedules = [];
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+async function fetchSchedules() {
+    try {
+        const headers = { 'Authorization': `Bearer ${authToken}` };
+        const res = await fetch('/api/schedules', { headers });
+        if (res.ok) {
+            currentSchedules = await res.json();
+            renderSchedulesGrid(currentSchedules);
+        }
+    } catch (err) {
+        console.error('Failed to fetch schedules:', err);
+    }
+}
+
+function renderSchedulesGrid(schedules) {
+    const container = document.getElementById('schedulesGrid');
+    if (!container) return;
+    container.innerHTML = '';
+
+    const order = [1, 2, 3, 4, 5, 6, 0]; // Mon -> Sun
+    
+    order.forEach(dayIndex => {
+        let s = (schedules || []).find(x => (x.day !== undefined ? x.day : x.Day) === dayIndex);
+        if (!s) {
+            s = {
+                day: dayIndex,
+                limitMinutes: 120,
+                hasAllowedHours: false,
+                allowedStartTime: '17:00:00',
+                allowedEndTime: '20:00:00',
+                bedtimeEnabled: false,
+                bedtime: '21:30:00'
+            };
+        }
+
+        const limitMins = s.limitMinutes !== undefined ? s.limitMinutes : (s.LimitMinutes || 120);
+        const bedtimeEnabled = s.bedtimeEnabled !== undefined ? s.bedtimeEnabled : (s.BedtimeEnabled || false);
+        const bedtimeVal = formatTimeForInput(s.bedtime || s.Bedtime || '21:30:00');
+        const hasAllowed = s.hasAllowedHours !== undefined ? s.hasAllowedHours : (s.HasAllowedHours || false);
+        const startTimeVal = formatTimeForInput(s.allowedStartTime || s.AllowedStartTime || '17:00:00');
+        const endTimeVal = formatTimeForInput(s.allowedEndTime || s.AllowedEndTime || '20:00:00');
+
+        const card = document.createElement('div');
+        card.className = 'card mt-3';
+        card.style.background = 'rgba(255, 255, 255, 0.03)';
+        card.style.border = '1px solid rgba(255, 255, 255, 0.1)';
+
+        card.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 10px; margin-bottom: 12px;">
+                <h4 style="margin: 0; font-size: 16px;">📅 ${DAY_NAMES[dayIndex]}</h4>
+                <span class="text-muted" style="font-size: 13px;" id="sched-formatted-${dayIndex}">${formatMinutesToHours(limitMins)}</span>
+            </div>
+            
+            <div class="form-row" style="gap: 15px; align-items: flex-start; display: flex; flex-wrap: wrap;">
+                <!-- 1. Daily Limit -->
+                <div class="form-group flex-1" style="min-width: 180px;">
+                    <label>Daily Limit (Minutes)</label>
+                    <input type="number" id="sched-limit-${dayIndex}" class="form-control" value="${limitMins}" min="0" max="1440" step="15" onchange="updateSchedFormatted(${dayIndex})">
+                </div>
+
+                <!-- 2. Bedtime Limit -->
+                <div class="form-group flex-1" style="min-width: 220px; background: rgba(0,0,0,0.2); padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600;">
+                        <input type="checkbox" id="sched-bedtime-toggle-${dayIndex}" ${bedtimeEnabled ? 'checked' : ''} onchange="toggleSchedSection(${dayIndex}, 'bedtime')">
+                        🌙 Enable Bedtime Lock
+                    </label>
+                    <div id="sched-bedtime-box-${dayIndex}" style="margin-top: 8px; display: ${bedtimeEnabled ? 'block' : 'none'};">
+                        <label style="font-size: 11px; color: #aaa;">Bedtime Lock Time:</label>
+                        <input type="time" id="sched-bedtime-time-${dayIndex}" class="form-control" value="${bedtimeVal}">
+                    </div>
+                </div>
+
+                <!-- 3. School Time / Allowed Hours -->
+                <div class="form-group flex-1" style="min-width: 250px; background: rgba(0,0,0,0.2); padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600;">
+                        <input type="checkbox" id="sched-school-toggle-${dayIndex}" ${hasAllowed ? 'checked' : ''} onchange="toggleSchedSection(${dayIndex}, 'school')">
+                        🏫 Enable School Time / Allowed Hours
+                    </label>
+                    <div id="sched-school-box-${dayIndex}" style="margin-top: 8px; display: ${hasAllowed ? 'block' : 'none'};">
+                        <label style="font-size: 11px; color: #aaa;">Allowed Range (Start to End):</label>
+                        <div style="display: flex; gap: 5px;">
+                            <input type="time" id="sched-school-start-${dayIndex}" class="form-control" value="${startTimeVal}">
+                            <input type="time" id="sched-school-end-${dayIndex}" class="form-control" value="${endTimeVal}">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        container.appendChild(card);
+    });
+}
+
+function formatMinutesToHours(mins) {
+    mins = parseInt(mins) || 0;
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return `${h}h ${m < 10 ? '0' : ''}${m}m limit`;
+}
+
+function updateSchedFormatted(dayIndex) {
+    const val = document.getElementById(`sched-limit-${dayIndex}`).value;
+    const el = document.getElementById(`sched-formatted-${dayIndex}`);
+    if (el) el.innerText = formatMinutesToHours(val);
+}
+
+function toggleSchedSection(dayIndex, section) {
+    if (section === 'bedtime') {
+        const chk = document.getElementById(`sched-bedtime-toggle-${dayIndex}`).checked;
+        document.getElementById(`sched-bedtime-box-${dayIndex}`).style.display = chk ? 'block' : 'none';
+    } else if (section === 'school') {
+        const chk = document.getElementById(`sched-school-toggle-${dayIndex}`).checked;
+        document.getElementById(`sched-school-box-${dayIndex}`).style.display = chk ? 'block' : 'none';
+    }
+}
+
+function formatTimeForInput(timeStr) {
+    if (!timeStr) return '21:30';
+    if (timeStr.length >= 5) return timeStr.substring(0, 5);
+    return timeStr;
+}
+
+async function saveAllSchedules() {
+    const order = [0, 1, 2, 3, 4, 5, 6];
+    const payload = [];
+
+    order.forEach(dayIndex => {
+        const limitMins = parseInt(document.getElementById(`sched-limit-${dayIndex}`)?.value || '120');
+        const bedtimeEnabled = document.getElementById(`sched-bedtime-toggle-${dayIndex}`)?.checked || false;
+        const bedtimeVal = (document.getElementById(`sched-bedtime-time-${dayIndex}`)?.value || '21:30') + ':00';
+        
+        const hasAllowed = document.getElementById(`sched-school-toggle-${dayIndex}`)?.checked || false;
+        const startTimeVal = (document.getElementById(`sched-school-start-${dayIndex}`)?.value || '17:00') + ':00';
+        const endTimeVal = (document.getElementById(`sched-school-end-${dayIndex}`)?.value || '20:00') + ':00';
+
+        payload.push({
+            Day: dayIndex,
+            LimitMinutes: limitMins,
+            HasAllowedHours: hasAllowed,
+            AllowedStartTime: startTimeVal,
+            AllowedEndTime: endTimeVal,
+            BedtimeEnabled: bedtimeEnabled,
+            Bedtime: bedtimeVal
+        });
+    });
+
+    try {
+        const res = await fetch('/api/schedules', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+            },
+            body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        if (res.ok && data.success) {
+            showToast('✓ Schedules, Bedtime limits & School-Time rules saved & applied!');
+            fetchSchedules();
+        } else {
+            alert(data.message || 'Failed to save schedules.');
+        }
+    } catch (err) {
+        console.error('Error saving schedules:', err);
+        alert('Failed to connect to server to save schedules.');
+    }
 }

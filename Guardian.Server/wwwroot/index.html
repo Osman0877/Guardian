@@ -64,6 +64,9 @@
                 <a href="#screentime" class="nav-item" onclick="switchTab('screentime')">
                     <span class="icon">⏱️</span> Screen Time
                 </a>
+                <a href="#schedules" class="nav-item" onclick="switchTab('schedules')">
+                    <span class="icon">⏰</span> Schedules & Bedtime
+                </a>
                 <a href="#apps" class="nav-item" onclick="switchTab('apps')">
                     <span class="icon">🚫</span> App Rules
                 </a>
@@ -250,6 +253,27 @@
                         <button class="btn btn-outline" onclick="addExtraTime(30)">+ 30 Minutes</button>
                         <button class="btn btn-outline" onclick="addExtraTime(60)">+ 1 Hour</button>
                         <button class="btn btn-outline" onclick="promptCustomExtraTime()">+ Custom Time</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SCHEDULES & BEDTIME TAB -->
+            <section id="tab-schedules" class="tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <h3>⏰ Schedules, Bedtime & School-Time Controls</h3>
+                        <button class="btn btn-primary btn-sm" onclick="saveAllSchedules()">💾 Save & Apply Schedules</button>
+                    </div>
+                    <p class="text-muted mt-2" style="font-size: 13px;">
+                        Configure daily screen-time limits, bedtime restrictions, and school-time / allowed hours for each day of the week. Uncheck an option to disable or remove it completely.
+                    </p>
+
+                    <div id="schedulesGrid" class="mt-4">
+                        <div class="empty-state">Loading schedule rules...</div>
+                    </div>
+
+                    <div class="mt-4 text-right" style="text-align: right;">
+                        <button class="btn btn-primary" onclick="saveAllSchedules()">💾 Save & Apply All Schedules</button>
                     </div>
                 </div>
             </section>
