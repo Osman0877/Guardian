@@ -35,6 +35,7 @@ namespace Guardian.Core.Services
 
         private CancellationTokenSource? _cts;
         private Task? _enforcementTask;
+        private bool _wasDeviceLockedLastCheck = false;
 
         public bool IsEnforcementActive => _enforcementTask != null && !_enforcementTask.IsCompleted;
         public bool IsRunningAsWindowsAdmin { get; private set; }
@@ -109,9 +110,15 @@ namespace Guardian.Core.Services
                 try
                 {
                     // 1. Device Level Lock Enforcement
-                    if (_usageTracker.IsDeviceLimitReached)
+                    bool isLocked = _usageTracker.IsDeviceLimitReached;
+                    if (isLocked && !_wasDeviceLockedLastCheck)
                     {
+                        _wasDeviceLockedLastCheck = true;
                         OnDeviceLockTriggered?.Invoke();
+                    }
+                    else if (!isLocked)
+                    {
+                        _wasDeviceLockedLastCheck = false;
                     }
 
                     // 2. Application Process Monitoring & Enforcement

@@ -209,7 +209,7 @@ namespace Guardian.Core.Services
                         has_allowed_hours INTEGER NOT NULL DEFAULT 0,
                         start_time TEXT NOT NULL,
                         end_time TEXT NOT NULL,
-                        bedtime_enabled INTEGER NOT NULL DEFAULT 1,
+                        bedtime_enabled INTEGER NOT NULL DEFAULT 0,
                         bedtime TEXT NOT NULL
                     );
                     CREATE TABLE IF NOT EXISTS advanced_schedules (
@@ -218,7 +218,7 @@ namespace Guardian.Core.Services
                         has_allowed_hours INTEGER NOT NULL DEFAULT 0,
                         start_time TEXT NOT NULL,
                         end_time TEXT NOT NULL,
-                        bedtime_enabled INTEGER NOT NULL DEFAULT 1,
+                        bedtime_enabled INTEGER NOT NULL DEFAULT 0,
                         bedtime TEXT NOT NULL
                     );
 
@@ -762,7 +762,7 @@ namespace Guardian.Core.Services
                     };
                 }
 
-                return new AdvancedDaySchedule { Day = day, LimitMinutes = 120 };
+                return new AdvancedDaySchedule { Day = day, LimitMinutes = 120, BedtimeEnabled = false, HasAllowedHours = false };
             }
         }
 

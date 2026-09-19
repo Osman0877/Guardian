@@ -106,7 +106,7 @@ namespace Guardian.Core.Models
         public bool HasAllowedHours { get; set; } = false;
         public TimeSpan AllowedStartTime { get; set; } = new TimeSpan(17, 0, 0); // 5:00 PM
         public TimeSpan AllowedEndTime { get; set; } = new TimeSpan(20, 0, 0);   // 8:00 PM
-        public bool BedtimeEnabled { get; set; } = true;
+        public bool BedtimeEnabled { get; set; } = false;
         public TimeSpan Bedtime { get; set; } = new TimeSpan(21, 30, 0);         // 9:30 PM
     }
 
