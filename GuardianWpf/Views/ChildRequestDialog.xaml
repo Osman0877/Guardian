@@ -1,0 +1,55 @@
+<Window x:Class="GuardianWpf.Views.ChildRequestDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Ask Parents for Time or App Access" Height="420" Width="480"
+        WindowStartupLocation="CenterScreen" ResizeMode="NoResize"
+        Background="{StaticResource BgDarkBrush}">
+
+    <Border BorderBrush="{StaticResource BorderDarkBrush}" BorderThickness="1" CornerRadius="16" Background="{StaticResource SurfaceDarkBrush}" Padding="28">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Header -->
+            <StackPanel Grid.Row="0" Margin="0,0,0,16">
+                <TextBlock Text="📩 Submit Request to Parents" FontSize="20" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center"/>
+                <TextBlock Text="Ask your parents for extra screen time or application access." FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+            </StackPanel>
+
+            <!-- Request Type -->
+            <StackPanel Grid.Row="1" Margin="0,0,0,12">
+                <TextBlock Text="What are you asking for?" FontSize="13" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,6"/>
+                <ComboBox x:Name="RequestTypeCombo" SelectedIndex="0" Padding="10,6">
+                    <ComboBoxItem Content="⏰ Extra Screen Time (+30 Minutes)"/>
+                    <ComboBoxItem Content="⏰ Extra Screen Time (+1 Hour)"/>
+                    <ComboBoxItem Content="🎮 Unlock Blocked Game/App"/>
+                    <ComboBoxItem Content="📝 General Permission Request"/>
+                </ComboBox>
+            </StackPanel>
+
+            <!-- Reason Note -->
+            <StackPanel Grid.Row="2" Margin="0,0,0,12">
+                <TextBlock Text="Why do you need this? (Optional note for parents)" FontSize="13" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,6"/>
+                <TextBox x:Name="ReasonInput" Style="{StaticResource ModernTextBoxStyle}" Height="65" TextWrapping="Wrap" AcceptsReturn="True" MaxLength="200"/>
+            </StackPanel>
+
+            <!-- Action Buttons -->
+            <Grid Grid.Row="5" Margin="0,16,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <Button Grid.Column="0" Content="Cancel" Style="{StaticResource OutlineButtonStyle}" Click="Cancel_Click"/>
+                <Button Grid.Column="2" Content="Send to Parents" Style="{StaticResource PrimaryButtonStyle}" Click="Send_Click"/>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>

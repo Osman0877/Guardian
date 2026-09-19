@@ -1,0 +1,69 @@
+<Window x:Class="GuardianWpf.Views.LockScreenWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Guardian Device Lock"
+        WindowState="Maximized" WindowStyle="None" Topmost="True"
+        ShowInTaskbar="False" ResizeMode="NoResize"
+        Background="#080C14">
+
+    <Grid VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="600">
+        <Border Style="{StaticResource CardBorderStyle}" Background="{StaticResource SurfaceDarkBrush}" BorderBrush="{StaticResource AccentBlueBrush}" Padding="40" CornerRadius="20">
+            <StackPanel HorizontalAlignment="Center">
+
+                <!-- Lock Icon & Header -->
+                <TextBlock Text="🔒" FontSize="64" HorizontalAlignment="Center" Margin="0,0,0,12"/>
+                <TextBlock Text="Screen Time Limit Reached" FontSize="26" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center"/>
+                <TextBlock x:Name="LockSubheaderText" Text="Your daily screen-time allowance for today has ended." FontSize="14" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,8,0,24"/>
+
+                <!-- Stats Box -->
+                <Border Background="{StaticResource CardDarkBrush}" CornerRadius="12" Padding="20,16" Margin="0,0,0,24">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0" HorizontalAlignment="Center">
+                            <TextBlock Text="TODAY'S USAGE" FontSize="11" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}" HorizontalAlignment="Center"/>
+                            <TextBlock x:Name="UsageText" Text="2h 00m" FontSize="20" FontWeight="Bold" Foreground="{StaticResource WarningYellowBrush}" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="1" HorizontalAlignment="Center">
+                            <TextBlock Text="DAILY LIMIT" FontSize="11" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}" HorizontalAlignment="Center"/>
+                            <TextBlock x:Name="LimitText" Text="2h 00m" FontSize="20" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!-- Normal State: Action Buttons -->
+                <StackPanel x:Name="ActionButtonsPanel" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,10">
+                    <Button Content="📩 Ask for More Time" Style="{StaticResource OutlineButtonStyle}" Margin="0,0,16,0" Padding="20,10" Click="RequestTime_Click"/>
+                    <Button Content="🔑 Parent Unlock" Style="{StaticResource PrimaryButtonStyle}" Padding="20,10" Click="ParentUnlock_Click"/>
+                </StackPanel>
+
+                <!-- Parent Unlock Form (Revealed when Parent Unlock clicked) -->
+                <StackPanel x:Name="UnlockFormPanel" Visibility="Collapsed" Margin="0,10,0,0">
+                    <TextBlock Text="Enter Parent Administrator Password" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource AccentGoldBrush}" HorizontalAlignment="Center" Margin="0,0,0,8"/>
+
+                    <Grid Width="340" Margin="0,0,0,12">
+                        <PasswordBox x:Name="UnlockPasswordBox" Style="{StaticResource ModernPasswordBoxStyle}" KeyDown="UnlockPasswordBox_KeyDown"/>
+                    </Grid>
+
+                    <TextBlock x:Name="UnlockErrorText" Text="" FontSize="12" Foreground="{StaticResource DangerRedBrush}" HorizontalAlignment="Center" Margin="0,0,0,12" Visibility="Collapsed"/>
+
+                    <TextBlock Text="Choose Extension Duration:" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,0,0,8"/>
+
+                    <WrapPanel HorizontalAlignment="Center" Margin="0,0,0,16">
+                        <Button Content="+15 Min" Style="{StaticResource OutlineButtonStyle}" Margin="4" Click="GrantTime15_Click"/>
+                        <Button Content="+30 Min" Style="{StaticResource OutlineButtonStyle}" Margin="4" Click="GrantTime30_Click"/>
+                        <Button Content="+1 Hour" Style="{StaticResource OutlineButtonStyle}" Margin="4" Click="GrantTime60_Click"/>
+                        <Button Content="Rest of Day" Style="{StaticResource SuccessButtonStyle}" Margin="4" Click="GrantRestOfDay_Click"/>
+                    </WrapPanel>
+
+                    <Button Content="Back" Style="{StaticResource OutlineButtonStyle}" HorizontalAlignment="Center" Click="CancelUnlock_Click" Padding="18,6"/>
+                </StackPanel>
+
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

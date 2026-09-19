@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="Guardian.Core/Guardian.Core.csproj" />
+  <Project Path="Guardian.Server/Guardian.Server.csproj" />
+  <Project Path="Guardian.Tests/Guardian.Tests.csproj" />
+  <Project Path="GuardianWatchdog/GuardianWatchdog.csproj" />
+  <Project Path="GuardianWpf/GuardianWpf.csproj" />
+</Solution>

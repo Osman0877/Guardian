@@ -1,0 +1,93 @@
+<UserControl x:Class="GuardianWpf.Views.ChildDashboardView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="32">
+
+            <!-- Child Welcome Header -->
+            <Grid Margin="0,0,0,24">
+                <StackPanel>
+                    <TextBlock Text="👦 Your Screen Time &amp; Activities" FontSize="26" FontWeight="Bold" Foreground="White"/>
+                    <TextBlock Text="See how much screen time you have used today and manage your allowed apps." FontSize="13" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,4,0,0"/>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                        <TextBlock Text="Active Child User: " FontSize="13" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                        <ComboBox x:Name="ActiveChildCombo" DisplayMemberPath="Name" SelectedValuePath="Id" Width="160" Margin="8,0,0,0" SelectionChanged="ActiveChildCombo_SelectionChanged"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- Ask Parent Button -->
+                <Button Content="📩 Ask Parents for More Time" Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Right" VerticalAlignment="Center" Padding="18,10" Click="RequestTime_Click"/>
+            </Grid>
+
+            <!-- Screen Time Overview Card -->
+            <Grid Margin="0,0,0,24">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="20"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Remaining Time Box -->
+                <Border Grid.Column="0" Style="{StaticResource CardBorderStyle}" Background="{StaticResource SurfaceDarkBrush}" BorderBrush="{StaticResource AccentBlueBrush}">
+                    <StackPanel>
+                        <TextBlock Text="REMAINING SCREEN TIME TODAY" FontSize="11" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}"/>
+                        <TextBlock x:Name="ChildRemainingText" Text="1h 45m" FontSize="34" FontWeight="Bold" Foreground="{StaticResource SuccessGreenBrush}" Margin="0,8,0,4"/>
+                        <TextBlock x:Name="ChildScheduleLabel" Text="Daily limit: 2 hours" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Used Time Box -->
+                <Border Grid.Column="2" Style="{StaticResource CardBorderStyle}">
+                    <StackPanel>
+                        <TextBlock Text="USED SCREEN TIME TODAY" FontSize="11" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}"/>
+                        <TextBlock x:Name="ChildUsedText" Text="0h 15m" FontSize="34" FontWeight="Bold" Foreground="White" Margin="0,8,0,4"/>
+                        <ProgressBar x:Name="ChildProgressBar" Height="8" Maximum="100" Value="15" Foreground="{StaticResource AccentBlueBrush}" Background="{StaticResource SurfaceDarkBrush}" BorderThickness="0" Margin="0,6,0,0"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- Application Limits Breakdown -->
+            <Border Style="{StaticResource CardBorderStyle}" Margin="0,0,0,24">
+                <StackPanel>
+                    <TextBlock Text="🎮 Your Games &amp; App Limits" FontSize="16" FontWeight="Bold" Foreground="White" Margin="0,0,0,14"/>
+
+                    <ListView x:Name="ChildAppsList" Background="Transparent" BorderThickness="0" Foreground="White">
+                        <ListView.ItemTemplate>
+                            <DataTemplate>
+                                <Border BorderBrush="{StaticResource BorderDarkBrush}" BorderThickness="0,0,0,1" Padding="8,12" Width="680">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="220"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="130"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding DisplayName}" FontSize="15" FontWeight="SemiBold" Foreground="White"/>
+                                            <TextBlock Text="{Binding Category}" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                        </StackPanel>
+
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="10,0">
+                                            <Grid>
+                                                <TextBlock Text="Used Today:" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                                <TextBlock Text="{Binding UsageAndLimitText}" FontSize="11" FontWeight="Bold" Foreground="{StaticResource AccentBlueBrush}" HorizontalAlignment="Right"/>
+                                            </Grid>
+                                            <ProgressBar Value="{Binding UsagePercent}" Maximum="100" Height="6" Background="{StaticResource SurfaceDarkBrush}" Foreground="{Binding ProgressBrush}" BorderThickness="0" Margin="0,4,0,0"/>
+                                        </StackPanel>
+
+                                        <Border Grid.Column="2" Background="{Binding BadgeBackground}" CornerRadius="6" Padding="8,4" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding StatusBadgeText}" FontSize="11" FontWeight="Bold" Foreground="{Binding BadgeForeground}"/>
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </StackPanel>
+            </Border>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

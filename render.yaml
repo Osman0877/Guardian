@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: guardian-parent-server
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: oregon
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: PORT
+        value: 8080

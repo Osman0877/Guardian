@@ -1,0 +1,93 @@
+<UserControl x:Class="GuardianWpf.Views.ScreenTimeView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="28">
+
+            <TextBlock Text="⏰ Screen Time Management" FontSize="24" FontWeight="Bold" Foreground="White"/>
+            <TextBlock Text="Monitor today's active screen time, remaining allowance, and historical trends." FontSize="13" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,4,0,24"/>
+
+            <!-- Main Usage Gauges Grid -->
+            <Grid Margin="0,0,0,24">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="16"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="16"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0" Style="{StaticResource CardBorderStyle}">
+                    <StackPanel>
+                        <TextBlock Text="USED TODAY" FontSize="11" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}"/>
+                        <TextBlock x:Name="UsedTimeText" Text="0h 00m" FontSize="26" FontWeight="Bold" Foreground="White" Margin="0,6,0,4"/>
+                        <ProgressBar x:Name="UsageProgressBar" Height="6" Maximum="100" Value="25" Foreground="{StaticResource AccentBlueBrush}" Background="{StaticResource SurfaceDarkBrush}" BorderThickness="0"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="2" Style="{StaticResource CardBorderStyle}">
+                    <StackPanel>
+                        <TextBlock Text="REMAINING TODAY" FontSize="11" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}"/>
+                        <TextBlock x:Name="RemainingTimeText" Text="2h 00m" FontSize="26" FontWeight="Bold" Foreground="{StaticResource SuccessGreenBrush}" Margin="0,6,0,4"/>
+                        <TextBlock x:Name="BonusTimeLabel" Text="+0m bonus time applied" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="4" Style="{StaticResource CardBorderStyle}">
+                    <StackPanel>
+                        <TextBlock Text="DAILY ALLOWANCE" FontSize="11" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}"/>
+                        <TextBlock x:Name="DailyAllowanceText" Text="2h 00m" FontSize="26" FontWeight="Bold" Foreground="{StaticResource AccentGoldBrush}" Margin="0,6,0,4"/>
+                        <TextBlock x:Name="ScheduleNameText" Text="Standard Day Schedule" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- Quick Allowance Adjuster Card -->
+            <Border Style="{StaticResource CardBorderStyle}" Margin="0,0,0,24">
+                <StackPanel>
+                    <TextBlock Text="Today's Quick Allowance Extension" FontSize="15" FontWeight="SemiBold" Foreground="White" Margin="0,0,0,6"/>
+                    <TextBlock Text="Grant immediate bonus time without permanently altering the weekly schedule." FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,14"/>
+
+                    <WrapPanel>
+                        <Button Content="➕ Grant +15 Min" Style="{StaticResource OutlineButtonStyle}" Margin="0,0,10,8" Click="Grant15_Click"/>
+                        <Button Content="➕ Grant +30 Min" Style="{StaticResource OutlineButtonStyle}" Margin="0,0,10,8" Click="Grant30_Click"/>
+                        <Button Content="➕ Grant +1 Hour" Style="{StaticResource OutlineButtonStyle}" Margin="0,0,10,8" Click="Grant60_Click"/>
+                        <Button Content="🔓 Unlock Rest of Today" Style="{StaticResource SuccessButtonStyle}" Margin="0,0,10,8" Click="GrantRestOfDay_Click"/>
+                        <Button Content="🔒 Lock Device Immediately" Style="{StaticResource DangerButtonStyle}" Margin="0,0,10,8" Click="LockNow_Click"/>
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Recent 7-Day Usage History Table -->
+            <Border Style="{StaticResource CardBorderStyle}">
+                <StackPanel>
+                    <TextBlock Text="Past 7 Days Usage History" FontSize="15" FontWeight="SemiBold" Foreground="White" Margin="0,0,0,12"/>
+
+                    <ListView x:Name="HistoryListView" Background="Transparent" BorderThickness="0" Foreground="White">
+                        <ListView.ItemTemplate>
+                            <DataTemplate>
+                                <Border BorderBrush="{StaticResource BorderDarkBrush}" BorderThickness="0,0,0,1" Padding="8,10" Width="680">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="160"/>
+                                            <ColumnDefinition Width="140"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="120"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <TextBlock Grid.Column="0" Text="{Binding DateLabel}" FontSize="13" FontWeight="SemiBold" Foreground="White"/>
+                                        <TextBlock Grid.Column="1" Text="{Binding FormattedUsed}" FontSize="13" FontWeight="Bold" Foreground="{StaticResource AccentBlueBrush}"/>
+                                        <ProgressBar Grid.Column="2" Value="{Binding UsagePercent}" Maximum="100" Height="6" VerticalAlignment="Center" Margin="10,0" Background="{StaticResource SurfaceDarkBrush}" Foreground="{StaticResource AccentBlueBrush}" BorderThickness="0"/>
+                                        <TextBlock Grid.Column="3" Text="{Binding StatusLabel}" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Right"/>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </StackPanel>
+            </Border>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

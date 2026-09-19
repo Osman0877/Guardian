@@ -1,0 +1,92 @@
+<UserControl x:Class="GuardianWpf.Views.SchedulesView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="28">
+
+            <TextBlock Text="📅 Screen Time Schedules &amp; Overrides" FontSize="24" FontWeight="Bold" Foreground="White"/>
+            <TextBlock Text="Configure total daily screen-time allowances. Set a general default and customize individual days." FontSize="13" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,4,0,24"/>
+
+            <!-- Default Daily Schedule Card -->
+            <Border Style="{StaticResource CardBorderStyle}" Margin="0,0,0,20">
+                <StackPanel>
+                    <Grid>
+                        <TextBlock Text="Standard Default Allowance (Monday–Sunday)" FontSize="16" FontWeight="SemiBold" Foreground="White"/>
+                        <TextBlock x:Name="DefaultMinutesText" Text="2 Hours (120 mins)" FontSize="16" FontWeight="Bold" Foreground="{StaticResource AccentBlueBrush}" HorizontalAlignment="Right"/>
+                    </Grid>
+                    <Slider x:Name="DefaultSlider" Minimum="15" Maximum="480" Value="120" SmallChange="15" LargeChange="30" IsSnapToTickEnabled="True" TickFrequency="15" Margin="0,14,0,0" ValueChanged="DefaultSlider_ValueChanged"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Day-by-Day Overrides Card -->
+            <Border Style="{StaticResource CardBorderStyle}" Margin="0,0,0,20">
+                <StackPanel>
+                    <TextBlock Text="Individual Day Overrides" FontSize="16" FontWeight="SemiBold" Foreground="White" Margin="0,0,0,4"/>
+                    <TextBlock Text="Custom settings for a specific day override the default schedule." FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,16"/>
+
+                    <!-- Monday -->
+                    <Grid Margin="0,8">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/><ColumnDefinition Width="140"/></Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Monday" FontSize="14" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center"/>
+                        <Slider Grid.Column="1" x:Name="MonSlider" Minimum="15" Maximum="480" Value="120" TickFrequency="15" IsSnapToTickEnabled="True" VerticalAlignment="Center" Margin="10,0" ValueChanged="DaySlider_ValueChanged"/>
+                        <TextBlock Grid.Column="2" x:Name="MonText" Text="2h 00m" FontSize="13" Foreground="{StaticResource AccentBlueBrush}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                    </Grid>
+
+                    <!-- Tuesday -->
+                    <Grid Margin="0,8">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/><ColumnDefinition Width="140"/></Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Tuesday" FontSize="14" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center"/>
+                        <Slider Grid.Column="1" x:Name="TueSlider" Minimum="15" Maximum="480" Value="120" TickFrequency="15" IsSnapToTickEnabled="True" VerticalAlignment="Center" Margin="10,0" ValueChanged="DaySlider_ValueChanged"/>
+                        <TextBlock Grid.Column="2" x:Name="TueText" Text="2h 00m" FontSize="13" Foreground="{StaticResource AccentBlueBrush}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                    </Grid>
+
+                    <!-- Wednesday -->
+                    <Grid Margin="0,8">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/><ColumnDefinition Width="140"/></Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Wednesday" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource AccentGoldBrush}" VerticalAlignment="Center"/>
+                        <Slider Grid.Column="1" x:Name="WedSlider" Minimum="15" Maximum="480" Value="90" TickFrequency="15" IsSnapToTickEnabled="True" VerticalAlignment="Center" Margin="10,0" ValueChanged="DaySlider_ValueChanged"/>
+                        <TextBlock Grid.Column="2" x:Name="WedText" Text="1h 30m (Custom)" FontSize="13" FontWeight="Bold" Foreground="{StaticResource AccentGoldBrush}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                    </Grid>
+
+                    <!-- Thursday -->
+                    <Grid Margin="0,8">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/><ColumnDefinition Width="140"/></Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Thursday" FontSize="14" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center"/>
+                        <Slider Grid.Column="1" x:Name="ThuSlider" Minimum="15" Maximum="480" Value="120" TickFrequency="15" IsSnapToTickEnabled="True" VerticalAlignment="Center" Margin="10,0" ValueChanged="DaySlider_ValueChanged"/>
+                        <TextBlock Grid.Column="2" x:Name="ThuText" Text="2h 00m" FontSize="13" Foreground="{StaticResource AccentBlueBrush}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                    </Grid>
+
+                    <!-- Friday -->
+                    <Grid Margin="0,8">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/><ColumnDefinition Width="140"/></Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Friday" FontSize="14" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center"/>
+                        <Slider Grid.Column="1" x:Name="FriSlider" Minimum="15" Maximum="480" Value="120" TickFrequency="15" IsSnapToTickEnabled="True" VerticalAlignment="Center" Margin="10,0" ValueChanged="DaySlider_ValueChanged"/>
+                        <TextBlock Grid.Column="2" x:Name="FriText" Text="2h 00m" FontSize="13" Foreground="{StaticResource AccentBlueBrush}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                    </Grid>
+
+                    <!-- Saturday -->
+                    <Grid Margin="0,8">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/><ColumnDefinition Width="140"/></Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Saturday" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource SuccessGreenBrush}" VerticalAlignment="Center"/>
+                        <Slider Grid.Column="1" x:Name="SatSlider" Minimum="15" Maximum="480" Value="180" TickFrequency="15" IsSnapToTickEnabled="True" VerticalAlignment="Center" Margin="10,0" ValueChanged="DaySlider_ValueChanged"/>
+                        <TextBlock Grid.Column="2" x:Name="SatText" Text="3h 00m (Custom)" FontSize="13" FontWeight="Bold" Foreground="{StaticResource SuccessGreenBrush}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                    </Grid>
+
+                    <!-- Sunday -->
+                    <Grid Margin="0,8">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/><ColumnDefinition Width="140"/></Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Sunday" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource SuccessGreenBrush}" VerticalAlignment="Center"/>
+                        <Slider Grid.Column="1" x:Name="SunSlider" Minimum="15" Maximum="480" Value="180" TickFrequency="15" IsSnapToTickEnabled="True" VerticalAlignment="Center" Margin="10,0" ValueChanged="DaySlider_ValueChanged"/>
+                        <TextBlock Grid.Column="2" x:Name="SunText" Text="3h 00m (Custom)" FontSize="13" FontWeight="Bold" Foreground="{StaticResource SuccessGreenBrush}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                    </Grid>
+
+                </StackPanel>
+            </Border>
+
+            <!-- Save Button -->
+            <Button Content="💾 Save Schedule" Style="{StaticResource SuccessButtonStyle}" HorizontalAlignment="Left" Padding="24,10" Click="SaveSchedule_Click"/>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

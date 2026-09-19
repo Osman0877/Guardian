@@ -1,0 +1,50 @@
+<Window x:Class="GuardianWpf.Views.ParentLoginDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Parent Authentication" Height="380" Width="460"
+        WindowStartupLocation="CenterScreen" ResizeMode="NoResize"
+        Background="{StaticResource BgDarkBrush}">
+
+    <Border BorderBrush="{StaticResource BorderDarkBrush}" BorderThickness="1" CornerRadius="16" Background="{StaticResource SurfaceDarkBrush}" Padding="28">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Header -->
+            <StackPanel Grid.Row="0" HorizontalAlignment="Center" Margin="0,0,0,16">
+                <TextBlock Text="🔐 Parent Authentication" FontSize="20" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center"/>
+                <TextBlock Text="Enter your administrator password to access protected controls." FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+            </StackPanel>
+
+            <!-- Default Password Hint (If active) -->
+            <Border x:Name="DefaultPasswordHintBorder" Grid.Row="1" Background="{StaticResource CardDarkBrush}" CornerRadius="8" Padding="12,8" Margin="0,0,0,16" Visibility="Visible">
+                <TextBlock Text="🔑 Initial Default Admin Password is: 1111" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource AccentGoldBrush}" HorizontalAlignment="Center"/>
+            </Border>
+
+            <!-- Password Field -->
+            <StackPanel Grid.Row="2" Margin="0,0,0,12">
+                <TextBlock Text="Password" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,6"/>
+                <PasswordBox x:Name="PasswordInput" Style="{StaticResource ModernPasswordBoxStyle}" KeyDown="PasswordInput_KeyDown"/>
+                <TextBlock x:Name="ErrorMessageText" Text="" FontSize="12" Foreground="{StaticResource DangerRedBrush}" Margin="0,6,0,0" Visibility="Collapsed"/>
+            </StackPanel>
+
+            <!-- Action Buttons -->
+            <Grid Grid.Row="5" Margin="0,16,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <Button Grid.Column="0" Content="Cancel" Style="{StaticResource OutlineButtonStyle}" Click="Cancel_Click"/>
+                <Button Grid.Column="2" Content="Unlock" Style="{StaticResource PrimaryButtonStyle}" Click="Unlock_Click"/>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>

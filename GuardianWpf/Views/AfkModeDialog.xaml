@@ -1,0 +1,45 @@
+<Window x:Class="GuardianWpf.Views.AfkModeDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Parent AFK Mode Controls"
+        Width="440" Height="480"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize" WindowStyle="SingleBorderWindow"
+        Background="#0D1117">
+
+    <Border Style="{StaticResource CardBorderStyle}" Padding="28">
+        <StackPanel>
+            <!-- Header -->
+            <TextBlock x:Name="DialogHeaderIcon" Text="🟢" FontSize="36" HorizontalAlignment="Center" Margin="0,0,0,8"/>
+            <TextBlock x:Name="DialogTitleText" Text="Activate AFK Mode" FontSize="20" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center"/>
+            <TextBlock Text="AFK Mode pauses screen-time accounting without resetting limits or disabling protection rules."
+                       FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" TextAlignment="Center" Margin="0,6,0,20"/>
+
+            <!-- Duration Options Panel (Visible when activating) -->
+            <StackPanel x:Name="DurationSelectionPanel" Margin="0,0,0,16">
+                <TextBlock Text="Select AFK Mode Duration:" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,8"/>
+                
+                <RadioButton x:Name="Radio15m" Content="⏱️ 15 Minutes" Foreground="White" Margin="0,4" IsChecked="True"/>
+                <RadioButton x:Name="Radio30m" Content="⏱️ 30 Minutes" Foreground="White" Margin="0,4"/>
+                <RadioButton x:Name="Radio1h" Content="⏱️ 1 Hour" Foreground="White" Margin="0,4"/>
+                <RadioButton x:Name="Radio2h" Content="⏱️ 2 Hours" Foreground="White" Margin="0,4"/>
+                <RadioButton x:Name="RadioManual" Content="♾️ Until Manually Disabled by Parent" Foreground="{StaticResource AccentGoldBrush}" FontWeight="SemiBold" Margin="0,4"/>
+            </StackPanel>
+
+            <!-- Parent Password Input -->
+            <TextBlock Text="Enter Parent Administrator Password:" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource AccentBlueBrush}" Margin="0,0,0,6"/>
+            <PasswordBox x:Name="PasswordInput" Style="{StaticResource ModernPasswordBoxStyle}" Margin="0,0,0,10" KeyDown="PasswordInput_KeyDown"/>
+            
+            <TextBlock x:Name="ErrorMessageText" Text="" Foreground="{StaticResource DangerRedBrush}" FontSize="12" Visibility="Collapsed" Margin="0,0,0,10" HorizontalAlignment="Center"/>
+
+            <!-- Action Buttons -->
+            <Grid Margin="0,12,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Button Grid.Column="0" Content="Cancel" Style="{StaticResource OutlineButtonStyle}" Margin="0,0,8,0" Click="Cancel_Click"/>
+                <Button Grid.Column="1" x:Name="ConfirmActionButton" Content="🟢 Activate AFK" Style="{StaticResource SuccessButtonStyle}" Margin="8,0,0,0" Click="Confirm_Click"/>
+            </Grid>
+        </StackPanel>
+    </Border>
+</Window>

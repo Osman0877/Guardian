@@ -1,0 +1,88 @@
+<Window x:Class="GuardianWpf.Views.AfkSessionDetailDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="AFK Session Details" Height="480" Width="480"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
+        Background="{StaticResource BgDarkBrush}" WindowStyle="None" AllowsTransparency="True">
+
+    <Border BorderBrush="{StaticResource AccentGoldBrush}" BorderThickness="1" CornerRadius="8" Background="{StaticResource SurfaceDarkBrush}" Padding="24">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Header -->
+            <StackPanel Grid.Row="0" Margin="0,0,0,16">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="🕒" FontSize="22" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <TextBlock x:Name="HeaderTitleText" Text="AFK SESSION DETAILS" FontSize="18" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
+                </StackPanel>
+                <TextBlock x:Name="SessionIdSubtext" Text="Session ID: -" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Margin="32,2,0,0"/>
+            </StackPanel>
+
+            <!-- Details List Grid -->
+            <Border Grid.Row="1" Background="{StaticResource BgDarkBrush}" CornerRadius="6" Padding="16" Margin="0,0,0,16">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <!-- Start Time -->
+                        <Grid Margin="0,0,0,10">
+                            <TextBlock Text="Started:" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <TextBlock x:Name="StartedValueText" Text="Sep 19, 2026 at 6:42:13 PM" FontSize="13" FontWeight="Bold" Foreground="White" HorizontalAlignment="Right"/>
+                        </Grid>
+
+                        <!-- End Time -->
+                        <Grid Margin="0,0,0,10">
+                            <TextBlock Text="Ended:" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <TextBlock x:Name="EndedValueText" Text="Sep 19, 2026 at 8:17:46 PM" FontSize="13" FontWeight="Bold" Foreground="White" HorizontalAlignment="Right"/>
+                        </Grid>
+
+                        <Separator Background="{StaticResource BorderDarkBrush}" Margin="0,4,0,10"/>
+
+                        <!-- Total Duration -->
+                        <Grid Margin="0,0,0,10">
+                            <TextBlock Text="Total Duration:" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <TextBlock x:Name="DurationValueText" Text="1h 35m 33s" FontSize="14" FontWeight="Bold" Foreground="{StaticResource SuccessGreenBrush}" HorizontalAlignment="Right"/>
+                        </Grid>
+
+                        <!-- Screen Time Excluded -->
+                        <Grid Margin="0,0,0,10">
+                            <TextBlock Text="Screen Time Excluded:" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <TextBlock x:Name="ExcludedValueText" Text="1h 35m 33s" FontSize="13" FontWeight="Bold" Foreground="{StaticResource AccentBlueBrush}" HorizontalAlignment="Right"/>
+                        </Grid>
+
+                        <Separator Background="{StaticResource BorderDarkBrush}" Margin="0,4,0,10"/>
+
+                        <!-- Activation Method -->
+                        <Grid Margin="0,0,0,10">
+                            <TextBlock Text="Activation Method:" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <TextBlock x:Name="MethodValueText" Text="Parent Password" FontSize="13" Foreground="White" HorizontalAlignment="Right"/>
+                        </Grid>
+
+                        <!-- Activated By -->
+                        <Grid Margin="0,0,0,10">
+                            <TextBlock Text="Activated By:" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <TextBlock x:Name="ActivatedByValueText" Text="Parent" FontSize="13" Foreground="White" HorizontalAlignment="Right"/>
+                        </Grid>
+
+                        <!-- Ended By -->
+                        <Grid Margin="0,0,0,10">
+                            <TextBlock Text="Ended By:" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <TextBlock x:Name="EndedByValueText" Text="Parent" FontSize="13" Foreground="White" HorizontalAlignment="Right"/>
+                        </Grid>
+
+                        <!-- End Reason -->
+                        <Grid Margin="0,0,0,4">
+                            <TextBlock Text="End Reason:" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <TextBlock x:Name="ReasonValueText" Text="Parent Disabled" FontSize="13" FontWeight="Bold" Foreground="{StaticResource AccentGoldBrush}" HorizontalAlignment="Right"/>
+                        </Grid>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+
+            <!-- Close Button -->
+            <Button Grid.Row="2" Content="Close" Style="{StaticResource PrimaryButtonStyle}" HorizontalAlignment="Right" Width="100" Padding="0,8" Click="Close_Click"/>
+        </Grid>
+    </Border>
+</Window>

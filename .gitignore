@@ -1,0 +1,46 @@
+# Visual Studio & .NET Build Outputs
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+*.user
+*.userosscache
+*.sln.docstates
+*.suo
+*.userprefs
+/Build/
+
+# Databases & Local Runtime Data
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.log
+guardian.db
+guardian_server.db
+
+# Environment & Secret Files
+*.env
+*.env.*
+*.pem
+*.key
+*.pfx
+*.cert
+*.p12
+
+# Local Deployment & Test Scripts containing API Tokens
+query_render.ps1
+query_owners.ps1
+test_render_image.ps1
+test_render_node.ps1
+test_render_post.ps1
+get_service.ps1
+deploy_to_render.ps1
+
+# IDE & OS Artifacts
+.vs/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

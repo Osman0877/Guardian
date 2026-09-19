@@ -1,0 +1,87 @@
+<UserControl x:Class="GuardianWpf.Views.ReportsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="28">
+
+            <TextBlock Text="📊 Activity History &amp; Incident Logs" FontSize="24" FontWeight="Bold" Foreground="White"/>
+            <TextBlock Text="Review past screen-time usage, application activity, and security enforcement events." FontSize="13" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,4,0,24"/>
+
+            <!-- Today's Activity & AFK Summary Card -->
+            <Border Style="{StaticResource CardBorderStyle}" Margin="0,0,0,24">
+                <StackPanel>
+                    <TextBlock Text="Today's Device Activity Breakdown" FontSize="16" FontWeight="SemiBold" Foreground="White" Margin="0,0,0,14"/>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="16"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="16"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Screen Time -->
+                        <Border Grid.Column="0" Background="{StaticResource SurfaceDarkBrush}" BorderBrush="{StaticResource BorderDarkBrush}" BorderThickness="1" CornerRadius="8" Padding="14">
+                            <StackPanel>
+                                <TextBlock Text="SCREEN TIME" FontSize="11" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}"/>
+                                <TextBlock x:Name="ReportScreenTimeText" Text="0h 00m" FontSize="22" FontWeight="Bold" Foreground="{StaticResource AccentBlueBrush}" Margin="0,6,0,2"/>
+                                <TextBlock Text="Counts toward limit" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- AFK Time -->
+                        <Border Grid.Column="2" Background="{StaticResource SurfaceDarkBrush}" BorderBrush="{StaticResource BorderDarkBrush}" BorderThickness="1" CornerRadius="8" Padding="14">
+                            <StackPanel>
+                                <TextBlock Text="AFK TIME" FontSize="11" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}"/>
+                                <TextBlock x:Name="ReportAfkTimeText" Text="0h 00m" FontSize="22" FontWeight="Bold" Foreground="{StaticResource SuccessGreenBrush}" Margin="0,6,0,2"/>
+                                <TextBlock Text="Parent authorized pause" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Total Device-On Time -->
+                        <Border Grid.Column="4" Background="{StaticResource SurfaceDarkBrush}" BorderBrush="{StaticResource BorderDarkBrush}" BorderThickness="1" CornerRadius="8" Padding="14">
+                            <StackPanel>
+                                <TextBlock Text="TOTAL DEVICE-ON TIME" FontSize="11" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}"/>
+                                <TextBlock x:Name="ReportTotalDeviceTimeText" Text="0h 00m" FontSize="22" FontWeight="Bold" Foreground="White" Margin="0,6,0,2"/>
+                                <TextBlock Text="Screen Time + AFK Time" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"/>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- Recent Security Incident Events -->
+            <Border Style="{StaticResource CardBorderStyle}" Margin="0,0,0,24">
+                <StackPanel>
+                    <TextBlock Text="Recent Enforcement &amp; Security Events" FontSize="16" FontWeight="SemiBold" Foreground="White" Margin="0,0,0,12"/>
+
+                    <ListView x:Name="IncidentsList" Background="Transparent" BorderThickness="0" Foreground="White" MaxHeight="320">
+                        <ListView.ItemTemplate>
+                            <DataTemplate>
+                                <Border BorderBrush="{StaticResource BorderDarkBrush}" BorderThickness="0,0,0,1" Padding="8,10" Width="700">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="150"/>
+                                            <ColumnDefinition Width="180"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <TextBlock Grid.Column="0" Text="{Binding FormattedTime}" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                        <TextBlock Grid.Column="1" Text="{Binding EventType}" FontSize="13" FontWeight="Bold" Foreground="{StaticResource AccentGoldBrush}"/>
+                                        <TextBlock Grid.Column="2" Text="{Binding Description}" FontSize="13" Foreground="White" TextWrapping="Wrap"/>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </StackPanel>
+            </Border>
+
+            <!-- Refresh Button -->
+            <Button Content="🔄 Refresh Logs" Style="{StaticResource OutlineButtonStyle}" HorizontalAlignment="Left" Padding="18,8" Click="Refresh_Click"/>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

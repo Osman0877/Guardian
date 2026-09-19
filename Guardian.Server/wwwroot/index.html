@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guardian — Parent Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+</head>
+<body class="dark-theme">
+
+    <!-- LOGIN SCREEN -->
+    <div id="loginView" class="auth-wrapper">
+        <div class="auth-card">
+            <div class="auth-header">
+                <div class="brand-badge">🛡️ GUARDIAN</div>
+                <h2>Parent Login</h2>
+                <p>Manage family safety and child devices remotely</p>
+            </div>
+
+            <form id="loginForm" onsubmit="handleLogin(event)">
+                <div id="loginError" class="alert error-alert" style="display: none;"></div>
+                
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <input type="text" id="username" placeholder="e.g. MasterDad" required autocomplete="username">
+                </div>
+
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" placeholder="••••••••" required autocomplete="current-password">
+                </div>
+
+                <button type="submit" id="loginBtn" class="btn btn-primary btn-block">Log In</button>
+                
+                <div class="auth-footer">
+                    <a href="#" onclick="alert('Please reset your master password inside the Guardian Windows Application settings.')">Forgot Password?</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MAIN APP DASHBOARD -->
+    <div id="appView" class="dashboard-layout" style="display: none;">
+        <!-- SIDEBAR -->
+        <aside class="sidebar">
+            <div class="brand">
+                <span class="shield-icon">🛡️</span>
+                <span class="brand-name">GUARDIAN</span>
+            </div>
+
+            <nav class="nav-menu">
+                <a href="#dashboard" class="nav-item active" onclick="switchTab('dashboard')">
+                    <span class="icon">📊</span> Dashboard
+                </a>
+                <a href="#children" class="nav-item" onclick="switchTab('children')">
+                    <span class="icon">👶</span> Children & Devices
+                </a>
+                <a href="#screentime" class="nav-item" onclick="switchTab('screentime')">
+                    <span class="icon">⏱️</span> Screen Time
+                </a>
+                <a href="#apps" class="nav-item" onclick="switchTab('apps')">
+                    <span class="icon">🚫</span> App Rules
+                </a>
+                <a href="#websites" class="nav-item" onclick="switchTab('websites')">
+                    <span class="icon">🌐</span> Website Blocking
+                </a>
+                <a href="#requests" class="nav-item" onclick="switchTab('requests')">
+                    <span class="icon">📩</span> Time Requests <span id="requestBadge" class="badge">0</span>
+                </a>
+                <a href="#afk" class="nav-item" onclick="switchTab('afk')">
+                    <span class="icon">🟢</span> AFK Mode & Log
+                </a>
+                <a href="#activity" class="nav-item" onclick="switchTab('activity')">
+                    <span class="icon">📜</span> Activity Stream
+                </a>
+            </nav>
+
+            <div class="user-profile-widget">
+                <div class="avatar">👨‍👩‍👦</div>
+                <div class="info">
+                    <div id="parentNameDisplay" class="name">MasterDad</div>
+                    <div class="role">Parent Account</div>
+                </div>
+                <button class="btn-logout" title="Log Out" onclick="handleLogout()">🚪</button>
+            </div>
+        </aside>
+
+        <!-- MAIN CONTENT AREA -->
+        <main class="main-content">
+            <!-- TOP BAR -->
+            <header class="topbar">
+                <div class="topbar-left">
+                    <h1 id="pageTitle">Parent Dashboard</h1>
+                    <p class="subtitle">Remote device enforcement & real-time monitoring</p>
+                </div>
+                <div class="topbar-right">
+                    <div id="connectionStatus" class="status-indicator online">
+                        <span class="dot"></span> Backend Live
+                    </div>
+                </div>
+            </header>
+
+            <div id="notificationBanner" class="toast-notification" style="display: none;"></div>
+
+            <!-- DASHBOARD TAB -->
+            <section id="tab-dashboard" class="tab-content active">
+                <div class="grid-3">
+                    <div class="card stat-card">
+                        <div class="card-icon">💻</div>
+                        <div class="stat-body">
+                            <span class="stat-label">Connected Devices</span>
+                            <h3 id="statOnlineDevices">1 Online</h3>
+                        </div>
+                    </div>
+                    <div class="card stat-card">
+                        <div class="card-icon">⏳</div>
+                        <div class="stat-body">
+                            <span class="stat-label">Alex's Screen Time Today</span>
+                            <h3 id="statScreenTime">1h 24m / 2h 00m</h3>
+                        </div>
+                    </div>
+                    <div class="card stat-card">
+                        <div class="card-icon">🛡️</div>
+                        <div class="stat-body">
+                            <span class="stat-label">Protection System</span>
+                            <h3 id="statProtection">Active & Healthy</h3>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ACTIVE DEVICE CONTROL PANEL -->
+                <div class="card device-hero-card mt-4">
+                    <div class="device-hero-header">
+                        <div class="device-info">
+                            <span class="device-icon">🖥️</span>
+                            <div>
+                                <h3 id="heroDeviceName">Alex Gaming PC</h3>
+                                <p class="device-meta">
+                                    <span id="heroDeviceStatus" class="tag tag-online">● Online</span>
+                                    <span class="separator">•</span>
+                                    Last Seen: <span id="heroLastSeen">Just now</span>
+                                    <span class="separator">•</span>
+                                    Current App: <strong id="heroCurrentApp">Roblox</strong>
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="action-buttons">
+                            <button class="btn btn-danger" onclick="triggerRemoteLock()">🔒 Lock Device</button>
+                            <button class="btn btn-success" onclick="toggleRemoteAfkModal()">🟢 AFK Mode</button>
+                        </div>
+                    </div>
+
+                    <div class="progress-bar-container mt-3">
+                        <div class="progress-labels">
+                            <span>Daily Limit Progress</span>
+                            <span id="screenTimePercentage">70%</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div id="screenTimeProgressFill" class="progress-fill" style="width: 70%;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- QUICK ACTIONS GRID -->
+                <div class="grid-2 mt-4">
+                    <!-- TIME REQUESTS QUICK CARD -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>📩 Pending Time Requests</h3>
+                            <button class="btn btn-sm btn-secondary" onclick="switchTab('requests')">View All</button>
+                        </div>
+                        <div id="quickRequestsList" class="requests-feed">
+                            <div class="empty-state">No pending time requests right now.</div>
+                        </div>
+                    </div>
+
+                    <!-- RECENT COMMAND STATUS FEED -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>⚡ Remote Command Status</h3>
+                            <button class="btn btn-sm btn-secondary" onclick="fetchRecentCommands()">Refresh</button>
+                        </div>
+                        <div id="commandStatusFeed" class="command-feed">
+                            <div class="empty-state">No recent commands dispatched.</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- CHILDREN & DEVICES TAB -->
+            <section id="tab-children" class="tab-content">
+                <div class="card">
+                    <h3>Connected Children & Devices</h3>
+                    <div id="childrenList" class="children-grid mt-3">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- SCREEN TIME TAB -->
+            <section id="tab-screentime" class="tab-content">
+                <div class="card">
+                    <h3>⏱️ Manage Screen Time & Limits</h3>
+                    <div class="form-row mt-3">
+                        <div class="form-group flex-1">
+                            <label>Child</label>
+                            <select id="screenTimeChildSelect" class="form-control">
+                                <option value="default">Alex (Default)</option>
+                            </select>
+                        </div>
+                        <div class="form-group flex-1">
+                            <label>New Daily Limit (Hours)</label>
+                            <input type="number" id="newDailyLimitInput" class="form-control" value="2" min="0" max="24" step="0.5">
+                        </div>
+                        <div class="form-group align-end">
+                            <button class="btn btn-primary" onclick="saveNewDailyLimit()">Save Limit</button>
+                        </div>
+                    </div>
+
+                    <hr class="divider">
+
+                    <h4 class="mt-4">➕ Add Bonus Extra Time</h4>
+                    <div class="bonus-time-grid mt-2">
+                        <button class="btn btn-outline" onclick="addExtraTime(15)">+ 15 Minutes</button>
+                        <button class="btn btn-outline" onclick="addExtraTime(30)">+ 30 Minutes</button>
+                        <button class="btn btn-outline" onclick="addExtraTime(60)">+ 1 Hour</button>
+                        <button class="btn btn-outline" onclick="promptCustomExtraTime()">+ Custom Time</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- APPS TAB -->
+            <section id="tab-apps" class="tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <h3>🚫 Manage Application Rules</h3>
+                        <button class="btn btn-primary btn-sm" onclick="promptBlockCustomApp()">+ Block Custom App</button>
+                    </div>
+                    <div class="table-responsive mt-3">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Application</th>
+                                    <th>Process Name</th>
+                                    <th>Category</th>
+                                    <th>Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="appRulesTableBody">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- WEBSITES TAB -->
+            <section id="tab-websites" class="tab-content">
+                <div class="card">
+                    <h3>🌐 Remote Website Blocking</h3>
+                    <div class="form-row mt-3">
+                        <div class="form-group flex-2">
+                            <label>Website Domain to Block</label>
+                            <input type="text" id="webDomainInput" class="form-control" placeholder="e.g. youtube.com or *.roblox.com">
+                        </div>
+                        <div class="form-group align-end">
+                            <button class="btn btn-danger" onclick="blockWebsite()">Block Website</button>
+                        </div>
+                    </div>
+
+                    <h4 class="mt-4">Blocked Domains</h4>
+                    <div class="table-responsive mt-2">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Domain</th>
+                                    <th>Category</th>
+                                    <th>Reason</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="webRulesTableBody">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TIME REQUESTS TAB -->
+            <section id="tab-requests" class="tab-content">
+                <div class="card">
+                    <h3>📩 Child Time Requests</h3>
+                    <div id="allRequestsList" class="requests-feed mt-3">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- AFK MODE TAB -->
+            <section id="tab-afk" class="tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <h3>🟢 AFK Mode Controls & Log</h3>
+                        <button class="btn btn-success" onclick="toggleRemoteAfkModal()">Toggle AFK Mode</button>
+                    </div>
+
+                    <div class="grid-3 mt-3">
+                        <div class="stat-box">
+                            <span class="label">Today's AFK Sessions</span>
+                            <h4 id="afkTodaySessions">0 Sessions</h4>
+                        </div>
+                        <div class="stat-box">
+                            <span class="label">Today's AFK Duration</span>
+                            <h4 id="afkTodayTime">0m 0s</h4>
+                        </div>
+                        <div class="stat-box">
+                            <span class="label">Total Recorded AFK</span>
+                            <h4 id="afkTotalTime">0m 0s</h4>
+                        </div>
+                    </div>
+
+                    <h4 class="mt-4">AFK Session History</h4>
+                    <div class="table-responsive mt-2">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Session ID</th>
+                                    <th>Start Time</th>
+                                    <th>End Time</th>
+                                    <th>Duration</th>
+                                    <th>Activated By</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="afkLogsTableBody">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ACTIVITY TAB -->
+            <section id="tab-activity" class="tab-content">
+                <div class="card">
+                    <h3>📜 Activity Stream & System Logs</h3>
+                    <div id="activityStreamFeed" class="activity-feed mt-3">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- LOCK CONFIRMATION MODAL -->
+    <div id="lockModal" class="modal-backdrop" style="display: none;">
+        <div class="modal-box">
+            <h3>🔒 Remote Lock Device</h3>
+            <p>Are you sure you want to lock <strong>Alex Gaming PC</strong> immediately?</p>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeLockModal()">Cancel</button>
+                <button class="btn btn-danger" onclick="confirmRemoteLock()">Lock Device</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- AFK MODAL -->
+    <div id="afkModal" class="modal-backdrop" style="display: none;">
+        <div class="modal-box">
+            <h3>🟢 Remote AFK Mode</h3>
+            <p>Activate AFK Mode on <strong>Alex Gaming PC</strong> to pause screen-time counting.</p>
+            
+            <div class="form-group">
+                <label>Duration</label>
+                <select id="afkDurationSelect" class="form-control">
+                    <option value="15">15 Minutes</option>
+                    <option value="30">30 Minutes</option>
+                    <option value="60" selected>1 Hour</option>
+                    <option value="120">2 Hours</option>
+                    <option value="0">Until Manually Disabled</option>
+                </select>
+            </div>
+
+            <div class="modal-actions mt-3">
+                <button class="btn btn-secondary" onclick="closeAfkModal()">Cancel</button>
+                <button class="btn btn-success" onclick="confirmRemoteAfk(true)">Activate AFK</button>
+                <button class="btn btn-danger" onclick="confirmRemoteAfk(false)">Disable AFK</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

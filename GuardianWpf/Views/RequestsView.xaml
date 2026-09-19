@@ -1,0 +1,59 @@
+<UserControl x:Class="GuardianWpf.Views.RequestsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="28">
+
+            <TextBlock Text="📩 Child Permission &amp; Time Requests" FontSize="24" FontWeight="Bold" Foreground="White"/>
+            <TextBlock Text="Review pending requests submitted by your child for additional screen time or application access." FontSize="13" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,4,0,24"/>
+
+            <!-- Requests List -->
+            <ItemsControl x:Name="RequestsItemsControl">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Style="{StaticResource CardBorderStyle}" Margin="0,0,0,14">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="220"/>
+                                </Grid.ColumnDefinitions>
+
+                                <!-- Request Content -->
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="{Binding Title}" FontSize="16" FontWeight="Bold" Foreground="White"/>
+                                    <TextBlock Text="{Binding Reason}" FontSize="13" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,4,0,6" TextWrapping="Wrap"/>
+                                    <TextBlock Text="{Binding FormattedDate}" FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
+                                </StackPanel>
+
+                                <!-- Action Buttons / Status -->
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right">
+                                    <!-- Pending Actions -->
+                                    <StackPanel Orientation="Horizontal" Visibility="{Binding PendingVisibility}">
+                                        <Button Content="Approve (+30m)" Style="{StaticResource SuccessButtonStyle}" Margin="0,0,8,0" Click="Approve_Click"/>
+                                        <Button Content="Deny" Style="{StaticResource DangerButtonStyle}" Click="Deny_Click"/>
+                                    </StackPanel>
+
+                                    <!-- Resolved Badge -->
+                                    <Border Visibility="{Binding ResolvedVisibility}" Background="{Binding StatusBadgeBackground}" CornerRadius="6" Padding="12,6">
+                                        <TextBlock Text="{Binding StatusText}" FontSize="12" FontWeight="Bold" Foreground="{Binding StatusBadgeForeground}" HorizontalAlignment="Center"/>
+                                    </Border>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- Empty State -->
+            <Border x:Name="EmptyStateBorder" Style="{StaticResource CardBorderStyle}" Visibility="Collapsed" Padding="40">
+                <StackPanel HorizontalAlignment="Center">
+                    <TextBlock Text="✨" FontSize="42" HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                    <TextBlock Text="No Pending Requests" FontSize="16" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center"/>
+                    <TextBlock Text="When your child submits an allowance or app request, it will appear here for review." FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                </StackPanel>
+            </Border>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

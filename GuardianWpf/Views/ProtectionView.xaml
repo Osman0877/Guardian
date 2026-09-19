@@ -1,0 +1,53 @@
+<UserControl x:Class="GuardianWpf.Views.ProtectionView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="28">
+
+            <TextBlock Text="🛡️ Protection Status &amp; System Health" FontSize="24" FontWeight="Bold" Foreground="White"/>
+            <TextBlock Text="Verify that all background enforcement and recovery components are operating normally." FontSize="13" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,4,0,24"/>
+
+            <!-- Component Health Cards -->
+            <Grid Margin="0,0,0,20">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="16"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Component 1: Core Usage & Enforcement Engine -->
+                <Border Grid.Column="0" Style="{StaticResource CardBorderStyle}">
+                    <StackPanel>
+                        <TextBlock Text="CORE ENFORCEMENT ENGINE" FontSize="11" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}"/>
+                        <TextBlock Text="Active &amp; Monitoring" FontSize="18" FontWeight="Bold" Foreground="{StaticResource SuccessGreenBrush}" Margin="0,6,0,4"/>
+                        <TextBlock Text="Authoritative monotonic background tracking, foreground window resolution, and active limit enforcement." FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Component 2: Watchdog Recovery Service -->
+                <Border Grid.Column="2" Style="{StaticResource CardBorderStyle}">
+                    <StackPanel>
+                        <TextBlock Text="GUARDIAN WATCHDOG SERVICE" FontSize="11" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}"/>
+                        <TextBlock x:Name="WatchdogStatusText" Text="Running (GuardianWatchdog.exe)" FontSize="18" FontWeight="Bold" Foreground="{StaticResource SuccessGreenBrush}" Margin="0,6,0,4"/>
+                        <TextBlock Text="Monitors the main process continuously and auto-recovers Guardian in ~1.0-1.5s on unexpected termination." FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- Diagnostics & Recovery Testing Card -->
+            <Border Style="{StaticResource CardBorderStyle}" Margin="0,0,0,20">
+                <StackPanel>
+                    <TextBlock Text="Self-Healing &amp; Recovery Validation Tools" FontSize="16" FontWeight="SemiBold" Foreground="White" Margin="0,0,0,6"/>
+                    <TextBlock Text="Test the 2-process recovery mechanism by simulating unexpected process termination." FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,16"/>
+
+                    <WrapPanel>
+                        <Button Content="⚡ Test Watchdog Recovery" Style="{StaticResource OutlineButtonStyle}" Margin="0,0,12,8" Click="TestKillWatchdog_Click"/>
+                        <Button Content="🔄 Restart Watchdog Service" Style="{StaticResource OutlineButtonStyle}" Margin="0,0,12,8" Click="RestartWatchdog_Click"/>
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>
