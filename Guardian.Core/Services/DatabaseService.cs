@@ -76,6 +76,18 @@ namespace Guardian.Core.Services
         List<DeviceStatusRecord> GetDevicesForParent(string parentId);
         List<DeviceStatusRecord> GetDevicesForChild(string childId);
 
+        // Parent-Child Invitations & Active Relationships
+        void SaveInvitation(ParentChildInvitation inv);
+        ParentChildInvitation? GetInvitation(string id);
+        List<ParentChildInvitation> GetInvitationsForParent(string parentUserId);
+        List<ParentChildInvitation> GetPendingInvitationsForChild(string childUserId);
+        void UpdateInvitationStatus(string id, InvitationStatus status, DateTime? respondedAt = null);
+
+        void SaveRelationship(ParentChildRelationship rel);
+        List<ParentChildRelationship> GetActiveRelationshipsForParent(string parentUserId);
+        List<ParentChildRelationship> GetActiveRelationshipsForChild(string childUserId);
+        bool IsParentConnectedToChild(string parentUserId, string childUserId);
+
         void SaveDeviceStatus(DeviceStatusRecord status);
         DeviceStatusRecord? GetDeviceStatus(string deviceId);
         List<DeviceStatusRecord> GetAllDeviceStatuses();
@@ -433,6 +445,26 @@ namespace Guardian.Core.Services
                         screen_time_used_seconds INTEGER NOT NULL DEFAULT 0,
                         current_app TEXT NOT NULL DEFAULT 'Idle',
                         afk_active INTEGER NOT NULL DEFAULT 0
+                    );
+
+                    -- 20. ParentChildInvitations & Relationships
+                    CREATE TABLE IF NOT EXISTS ParentChildInvitations (
+                        id TEXT PRIMARY KEY,
+                        parent_user_id TEXT NOT NULL,
+                        parent_username TEXT NOT NULL,
+                        child_user_id TEXT NOT NULL,
+                        child_username TEXT NOT NULL,
+                        status TEXT NOT NULL DEFAULT 'Pending',
+                        created_at TEXT NOT NULL,
+                        responded_at TEXT,
+                        expires_at TEXT NOT NULL
+                    );
+                    CREATE TABLE IF NOT EXISTS ParentChildRelationships (
+                        id TEXT PRIMARY KEY,
+                        parent_user_id TEXT NOT NULL,
+                        child_user_id TEXT NOT NULL,
+                        created_at TEXT NOT NULL,
+                        is_active INTEGER NOT NULL DEFAULT 1
                     );
                 ";
                 cmd.ExecuteNonQuery();
@@ -1960,7 +1992,15 @@ namespace Guardian.Core.Services
                 using var conn = new SqliteConnection(_connectionString);
                 conn.Open();
                 using var cmd = conn.CreateCommand();
-                cmd.CommandText = "SELECT id, name, avatar, age, is_active, daily_limit_minutes, bedtime, bedtime_enabled, created_at, parent_id, user_id FROM children WHERE parent_id = @pid ORDER BY name;";
+                // Select child profiles where there is an ACTIVE ParentChildRelationship for parentId
+                cmd.CommandText = @"
+                    SELECT id, name, avatar, age, is_active, daily_limit_minutes, bedtime, bedtime_enabled, created_at, parent_id, user_id 
+                    FROM children 
+                    WHERE (user_id IN (SELECT child_user_id FROM ParentChildRelationships WHERE parent_user_id = @pid AND is_active = 1)
+                           OR parent_id = @pid)
+                      AND EXISTS (SELECT 1 FROM ParentChildRelationships WHERE parent_user_id = @pid AND is_active = 1)
+                    ORDER BY name;
+                ";
                 cmd.Parameters.AddWithValue("@pid", parentId);
                 using var reader = cmd.ExecuteReader();
                 while (reader.Read())
@@ -1993,7 +2033,17 @@ namespace Guardian.Core.Services
                 using var conn = new SqliteConnection(_connectionString);
                 conn.Open();
                 using var cmd = conn.CreateCommand();
-                cmd.CommandText = "SELECT device_id, device_name, child_id, is_online, last_seen, is_guardian_running, is_protected, screen_time_used_seconds, current_app, afk_active, parent_id FROM DeviceStatuses WHERE parent_id = @pid OR child_id IN (SELECT id FROM children WHERE parent_id = @pid);";
+                // STRICT DEVICE VISIBILITY: Devices are returned ONLY if child_id (or parent_id) is connected via an active ParentChildRelationship
+                cmd.CommandText = @"
+                    SELECT device_id, device_name, child_id, is_online, last_seen, is_guardian_running, is_protected, screen_time_used_seconds, current_app, afk_active, parent_id 
+                    FROM DeviceStatuses 
+                    WHERE (
+                            child_id IN (SELECT child_user_id FROM ParentChildRelationships WHERE parent_user_id = @pid AND is_active = 1)
+                            OR parent_id IN (SELECT child_user_id FROM ParentChildRelationships WHERE parent_user_id = @pid AND is_active = 1)
+                          )
+                      AND EXISTS (SELECT 1 FROM ParentChildRelationships WHERE parent_user_id = @pid AND is_active = 1)
+                    ORDER BY last_seen DESC;
+                ";
                 cmd.Parameters.AddWithValue("@pid", parentId);
                 using var reader = cmd.ExecuteReader();
                 while (reader.Read())
@@ -2013,7 +2063,7 @@ namespace Guardian.Core.Services
                 using var conn = new SqliteConnection(_connectionString);
                 conn.Open();
                 using var cmd = conn.CreateCommand();
-                cmd.CommandText = "SELECT device_id, device_name, child_id, is_online, last_seen, is_guardian_running, is_protected, screen_time_used_seconds, current_app, afk_active, parent_id FROM DeviceStatuses WHERE child_id = @cid;";
+                cmd.CommandText = "SELECT device_id, device_name, child_id, is_online, last_seen, is_guardian_running, is_protected, screen_time_used_seconds, current_app, afk_active, parent_id FROM DeviceStatuses WHERE child_id = @cid OR parent_id = @cid;";
                 cmd.Parameters.AddWithValue("@cid", childId);
                 using var reader = cmd.ExecuteReader();
                 while (reader.Read())
@@ -2022,6 +2072,231 @@ namespace Guardian.Core.Services
                 }
             }
             return list;
+        }
+
+        // --- ParentChildInvitations & ParentChildRelationships Implementation ---
+        public void SaveInvitation(ParentChildInvitation inv)
+        {
+            lock (_dbLock)
+            {
+                using var conn = new SqliteConnection(_connectionString);
+                conn.Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = @"
+                    INSERT INTO ParentChildInvitations (id, parent_user_id, parent_username, child_user_id, child_username, status, created_at, responded_at, expires_at)
+                    VALUES (@id, @puid, @pname, @cuid, @cname, @status, @created, @responded, @expires)
+                    ON CONFLICT(id) DO UPDATE SET
+                        status = excluded.status,
+                        responded_at = excluded.responded_at;
+                ";
+                cmd.Parameters.AddWithValue("@id", inv.Id);
+                cmd.Parameters.AddWithValue("@puid", inv.ParentUserId);
+                cmd.Parameters.AddWithValue("@pname", inv.ParentUsername);
+                cmd.Parameters.AddWithValue("@cuid", inv.ChildUserId);
+                cmd.Parameters.AddWithValue("@cname", inv.ChildUsername);
+                cmd.Parameters.AddWithValue("@status", inv.Status.ToString());
+                cmd.Parameters.AddWithValue("@created", inv.CreatedAt.ToString("o"));
+                cmd.Parameters.AddWithValue("@responded", inv.RespondedAt.HasValue ? inv.RespondedAt.Value.ToString("o") : (object)DBNull.Value);
+                cmd.Parameters.AddWithValue("@expires", inv.ExpiresAt.ToString("o"));
+                cmd.ExecuteNonQuery();
+            }
+        }
+
+        public ParentChildInvitation? GetInvitation(string id)
+        {
+            if (string.IsNullOrWhiteSpace(id)) return null;
+            lock (_dbLock)
+            {
+                using var conn = new SqliteConnection(_connectionString);
+                conn.Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "SELECT id, parent_user_id, parent_username, child_user_id, child_username, status, created_at, responded_at, expires_at FROM ParentChildInvitations WHERE id = @id;";
+                cmd.Parameters.AddWithValue("@id", id);
+                using var reader = cmd.ExecuteReader();
+                if (reader.Read())
+                {
+                    return ParseInvitationRecord(reader);
+                }
+            }
+            return null;
+        }
+
+        public List<ParentChildInvitation> GetInvitationsForParent(string parentUserId)
+        {
+            var list = new List<ParentChildInvitation>();
+            if (string.IsNullOrWhiteSpace(parentUserId)) return list;
+            lock (_dbLock)
+            {
+                using var conn = new SqliteConnection(_connectionString);
+                conn.Open();
+
+                // Auto-expire old pending invitations
+                using var expireCmd = conn.CreateCommand();
+                expireCmd.CommandText = "UPDATE ParentChildInvitations SET status = 'Expired' WHERE status = 'Pending' AND expires_at < @now;";
+                expireCmd.Parameters.AddWithValue("@now", DateTime.UtcNow.ToString("o"));
+                expireCmd.ExecuteNonQuery();
+
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "SELECT id, parent_user_id, parent_username, child_user_id, child_username, status, created_at, responded_at, expires_at FROM ParentChildInvitations WHERE parent_user_id = @puid ORDER BY created_at DESC;";
+                cmd.Parameters.AddWithValue("@puid", parentUserId);
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    list.Add(ParseInvitationRecord(reader));
+                }
+            }
+            return list;
+        }
+
+        public List<ParentChildInvitation> GetPendingInvitationsForChild(string childUserId)
+        {
+            var list = new List<ParentChildInvitation>();
+            if (string.IsNullOrWhiteSpace(childUserId)) return list;
+            lock (_dbLock)
+            {
+                using var conn = new SqliteConnection(_connectionString);
+                conn.Open();
+
+                // Auto-expire old pending invitations
+                using var expireCmd = conn.CreateCommand();
+                expireCmd.CommandText = "UPDATE ParentChildInvitations SET status = 'Expired' WHERE status = 'Pending' AND expires_at < @now;";
+                expireCmd.Parameters.AddWithValue("@now", DateTime.UtcNow.ToString("o"));
+                expireCmd.ExecuteNonQuery();
+
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "SELECT id, parent_user_id, parent_username, child_user_id, child_username, status, created_at, responded_at, expires_at FROM ParentChildInvitations WHERE child_user_id = @cuid AND status = 'Pending' AND expires_at > @now ORDER BY created_at DESC;";
+                cmd.Parameters.AddWithValue("@cuid", childUserId);
+                cmd.Parameters.AddWithValue("@now", DateTime.UtcNow.ToString("o"));
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    list.Add(ParseInvitationRecord(reader));
+                }
+            }
+            return list;
+        }
+
+        public void UpdateInvitationStatus(string id, InvitationStatus status, DateTime? respondedAt = null)
+        {
+            lock (_dbLock)
+            {
+                using var conn = new SqliteConnection(_connectionString);
+                conn.Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "UPDATE ParentChildInvitations SET status = @status, responded_at = @responded WHERE id = @id;";
+                cmd.Parameters.AddWithValue("@status", status.ToString());
+                cmd.Parameters.AddWithValue("@responded", respondedAt.HasValue ? respondedAt.Value.ToString("o") : (object)DBNull.Value);
+                cmd.Parameters.AddWithValue("@id", id);
+                cmd.ExecuteNonQuery();
+            }
+        }
+
+        public void SaveRelationship(ParentChildRelationship rel)
+        {
+            lock (_dbLock)
+            {
+                using var conn = new SqliteConnection(_connectionString);
+                conn.Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = @"
+                    INSERT INTO ParentChildRelationships (id, parent_user_id, child_user_id, created_at, is_active)
+                    VALUES (@id, @puid, @cuid, @created, @active)
+                    ON CONFLICT(id) DO UPDATE SET is_active = excluded.is_active;
+                ";
+                cmd.Parameters.AddWithValue("@id", rel.Id);
+                cmd.Parameters.AddWithValue("@puid", rel.ParentUserId);
+                cmd.Parameters.AddWithValue("@cuid", rel.ChildUserId);
+                cmd.Parameters.AddWithValue("@created", rel.CreatedAt.ToString("o"));
+                cmd.Parameters.AddWithValue("@active", rel.IsActive ? 1 : 0);
+                cmd.ExecuteNonQuery();
+            }
+        }
+
+        public List<ParentChildRelationship> GetActiveRelationshipsForParent(string parentUserId)
+        {
+            var list = new List<ParentChildRelationship>();
+            if (string.IsNullOrWhiteSpace(parentUserId)) return list;
+            lock (_dbLock)
+            {
+                using var conn = new SqliteConnection(_connectionString);
+                conn.Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "SELECT id, parent_user_id, child_user_id, created_at, is_active FROM ParentChildRelationships WHERE parent_user_id = @puid AND is_active = 1;";
+                cmd.Parameters.AddWithValue("@puid", parentUserId);
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    list.Add(new ParentChildRelationship
+                    {
+                        Id = reader.GetString(0),
+                        ParentUserId = reader.GetString(1),
+                        ChildUserId = reader.GetString(2),
+                        CreatedAt = DateTime.TryParse(reader.GetString(3), out var ca) ? ca : DateTime.UtcNow,
+                        IsActive = reader.GetInt32(4) == 1
+                    });
+                }
+            }
+            return list;
+        }
+
+        public List<ParentChildRelationship> GetActiveRelationshipsForChild(string childUserId)
+        {
+            var list = new List<ParentChildRelationship>();
+            if (string.IsNullOrWhiteSpace(childUserId)) return list;
+            lock (_dbLock)
+            {
+                using var conn = new SqliteConnection(_connectionString);
+                conn.Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "SELECT id, parent_user_id, child_user_id, created_at, is_active FROM ParentChildRelationships WHERE child_user_id = @cuid AND is_active = 1;";
+                cmd.Parameters.AddWithValue("@cuid", childUserId);
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    list.Add(new ParentChildRelationship
+                    {
+                        Id = reader.GetString(0),
+                        ParentUserId = reader.GetString(1),
+                        ChildUserId = reader.GetString(2),
+                        CreatedAt = DateTime.TryParse(reader.GetString(3), out var ca) ? ca : DateTime.UtcNow,
+                        IsActive = reader.GetInt32(4) == 1
+                    });
+                }
+            }
+            return list;
+        }
+
+        public bool IsParentConnectedToChild(string parentUserId, string childUserId)
+        {
+            if (string.IsNullOrWhiteSpace(parentUserId) || string.IsNullOrWhiteSpace(childUserId)) return false;
+            lock (_dbLock)
+            {
+                using var conn = new SqliteConnection(_connectionString);
+                conn.Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "SELECT COUNT(1) FROM ParentChildRelationships WHERE parent_user_id = @puid AND child_user_id = @cuid AND is_active = 1;";
+                cmd.Parameters.AddWithValue("@puid", parentUserId);
+                cmd.Parameters.AddWithValue("@cuid", childUserId);
+                long count = (long)(cmd.ExecuteScalar() ?? 0L);
+                return count > 0;
+            }
+        }
+
+        private ParentChildInvitation ParseInvitationRecord(SqliteDataReader reader)
+        {
+            Enum.TryParse<InvitationStatus>(reader.GetString(5), true, out var status);
+            return new ParentChildInvitation
+            {
+                Id = reader.GetString(0),
+                ParentUserId = reader.GetString(1),
+                ParentUsername = reader.GetString(2),
+                ChildUserId = reader.GetString(3),
+                ChildUsername = reader.GetString(4),
+                Status = status,
+                CreatedAt = DateTime.TryParse(reader.GetString(6), out var ca) ? ca : DateTime.UtcNow,
+                RespondedAt = reader.IsDBNull(7) ? null : (DateTime.TryParse(reader.GetString(7), out var ra) ? ra : null),
+                ExpiresAt = DateTime.TryParse(reader.GetString(8), out var ea) ? ea : DateTime.UtcNow.AddDays(7)
+            };
         }
     }
 }

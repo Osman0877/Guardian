@@ -667,11 +667,14 @@ namespace Guardian.Tests
             var parentA = _auth.RegisterUser("ParentA", "PassA123!", UserRole.Parent);
             var parentB = _auth.RegisterUser("ParentB", "PassB123!", UserRole.Parent);
 
-            var childA = new ChildProfile { Id = "child_a", ParentId = parentA.Id, Name = "ChildA" };
-            var childB = new ChildProfile { Id = "child_b", ParentId = parentB.Id, Name = "ChildB" };
+            var childA = new ChildProfile { Id = "child_a", ParentId = parentA.Id, UserId = "user_a", Name = "ChildA" };
+            var childB = new ChildProfile { Id = "child_b", ParentId = parentB.Id, UserId = "user_b", Name = "ChildB" };
 
             _db.SaveChild(childA);
             _db.SaveChild(childB);
+
+            _db.SaveRelationship(new ParentChildRelationship { ParentUserId = parentA.Id, ChildUserId = "user_a", IsActive = true });
+            _db.SaveRelationship(new ParentChildRelationship { ParentUserId = parentB.Id, ChildUserId = "user_b", IsActive = true });
 
             var parentAChildren = _db.GetChildrenForParent(parentA.Id);
             Assert.Single(parentAChildren);
@@ -685,11 +688,17 @@ namespace Guardian.Tests
         [Fact]
         public void Test30_DeviceStatus_DynamicOnlineStatus_Heartbeat_Expiry()
         {
+            string pid = "parent_01";
+            string cid = "child_01";
+
+            _db.SaveRelationship(new ParentChildRelationship { ParentUserId = pid, ChildUserId = cid, IsActive = true });
+
             var devRecent = new DeviceStatusRecord
             {
                 DeviceId = "DEV_ONLINE_01",
                 DeviceName = "Online PC",
-                ParentId = "parent_01",
+                ParentId = pid,
+                ChildId = cid,
                 LastSeen = DateTime.UtcNow
             };
             _db.SaveDeviceStatus(devRecent);
@@ -698,12 +707,13 @@ namespace Guardian.Tests
             {
                 DeviceId = "DEV_OFFLINE_01",
                 DeviceName = "Offline PC",
-                ParentId = "parent_01",
+                ParentId = pid,
+                ChildId = cid,
                 LastSeen = DateTime.UtcNow.AddMinutes(-5) // 5 minutes ago
             };
             _db.SaveDeviceStatus(devStale);
 
-            var parentDevices = _db.GetDevicesForParent("parent_01");
+            var parentDevices = _db.GetDevicesForParent(pid);
             var onlineDev = parentDevices.Find(d => d.DeviceId == "DEV_ONLINE_01");
             var offlineDev = parentDevices.Find(d => d.DeviceId == "DEV_OFFLINE_01");
 
@@ -855,6 +865,193 @@ namespace Guardian.Tests
 
             var reloaded = _db.LoadSettings();
             Assert.Equal(user, reloaded.LinkedWebUsername);
+        }
+
+        [Fact]
+        public void Test36_ParentChildInvitationWorkflow_Accept_Decline_Cancel_And_DeviceVisibility()
+        {
+            var auth = new AuthenticationService(_db);
+
+            // 1. Create Accounts
+            var masterDad = auth.RegisterUser($"MasterDad_{Guid.NewGuid():N}", "Pass123!", UserRole.Parent);
+            var kid123 = auth.RegisterUser($"Kid123_{Guid.NewGuid():N}", "Pass123!", UserRole.Child);
+
+            var unrelatedDad = auth.RegisterUser($"UnrelatedDad_{Guid.NewGuid():N}", "Pass123!", UserRole.Parent);
+            var kid999 = auth.RegisterUser($"Kid999_{Guid.NewGuid():N}", "Pass123!", UserRole.Child);
+
+            // 2. Register Kid123 Device (owned by Kid123)
+            var kidDevice = new DeviceStatusRecord
+            {
+                DeviceId = $"gdev_kid123_{Guid.NewGuid():N}",
+                DeviceName = "Kid123 Gaming Laptop",
+                ChildId = kid123.Id,
+                IsOnline = true,
+                LastSeen = DateTime.UtcNow
+            };
+            _db.SaveDeviceStatus(kidDevice);
+
+            // 3. Strict Initial Isolation: MasterDad sees NO children and NO devices
+            Assert.Empty(_db.GetChildrenForParent(masterDad.Id));
+            Assert.Empty(_db.GetDevicesForParent(masterDad.Id));
+
+            // 4. Send Invitation from MasterDad -> Kid123
+            var inv = new ParentChildInvitation
+            {
+                Id = Guid.NewGuid().ToString(),
+                ParentUserId = masterDad.Id,
+                ParentUsername = masterDad.Username,
+                ChildUserId = kid123.Id,
+                ChildUsername = kid123.Username,
+                Status = InvitationStatus.Pending,
+                CreatedAt = DateTime.UtcNow,
+                ExpiresAt = DateTime.UtcNow.AddDays(7)
+            };
+            _db.SaveInvitation(inv);
+
+            // Verify Pending state does NOT grant access
+            Assert.False(_db.IsParentConnectedToChild(masterDad.Id, kid123.Id));
+            Assert.Empty(_db.GetChildrenForParent(masterDad.Id));
+            Assert.Empty(_db.GetDevicesForParent(masterDad.Id));
+
+            // 5. Kid123 Accepts Invitation
+            _db.UpdateInvitationStatus(inv.Id, InvitationStatus.Accepted, DateTime.UtcNow);
+            _db.SaveRelationship(new ParentChildRelationship
+            {
+                ParentUserId = masterDad.Id,
+                ChildUserId = kid123.Id,
+                CreatedAt = DateTime.UtcNow,
+                IsActive = true
+            });
+
+            // 6. Verify Active Access Granted
+            Assert.True(_db.IsParentConnectedToChild(masterDad.Id, kid123.Id));
+            var parentDevices = _db.GetDevicesForParent(masterDad.Id);
+            Assert.Single(parentDevices);
+            Assert.Equal(kidDevice.DeviceId, parentDevices[0].DeviceId);
+
+            // 7. Verify Unrelated Parent CANNOT see Kid123 or Kid123's device
+            Assert.False(_db.IsParentConnectedToChild(unrelatedDad.Id, kid123.Id));
+            Assert.Empty(_db.GetChildrenForParent(unrelatedDad.Id));
+            Assert.Empty(_db.GetDevicesForParent(unrelatedDad.Id));
+
+            // 8. Test Decline Flow
+            var invDecline = new ParentChildInvitation
+            {
+                Id = Guid.NewGuid().ToString(),
+                ParentUserId = masterDad.Id,
+                ParentUsername = masterDad.Username,
+                ChildUserId = kid999.Id,
+                ChildUsername = kid999.Username,
+                Status = InvitationStatus.Pending,
+                CreatedAt = DateTime.UtcNow
+            };
+            _db.SaveInvitation(invDecline);
+            _db.UpdateInvitationStatus(invDecline.Id, InvitationStatus.Declined, DateTime.UtcNow);
+
+            var loadedDeclined = _db.GetInvitation(invDecline.Id);
+            Assert.NotNull(loadedDeclined);
+            Assert.Equal(InvitationStatus.Declined, loadedDeclined.Status);
+            Assert.False(_db.IsParentConnectedToChild(masterDad.Id, kid999.Id));
+
+            // 9. Test Cancel Flow
+            var invCancel = new ParentChildInvitation
+            {
+                Id = Guid.NewGuid().ToString(),
+                ParentUserId = masterDad.Id,
+                ParentUsername = masterDad.Username,
+                ChildUserId = kid999.Id,
+                ChildUsername = kid999.Username,
+                Status = InvitationStatus.Pending,
+                CreatedAt = DateTime.UtcNow
+            };
+            _db.SaveInvitation(invCancel);
+            _db.UpdateInvitationStatus(invCancel.Id, InvitationStatus.Cancelled, DateTime.UtcNow);
+
+            var loadedCancelled = _db.GetInvitation(invCancel.Id);
+            Assert.NotNull(loadedCancelled);
+            Assert.Equal(InvitationStatus.Cancelled, loadedCancelled.Status);
+        }
+
+        [Fact]
+        public void Test37_ExactTwoAccountTest_ParentTest_And_ChildTest()
+        {
+            var auth = new AuthenticationService(_db);
+
+            // 1. ParentTest and ChildTest accounts created
+            var parentTest = auth.RegisterUser("ParentTest", "ParentPass123!", UserRole.Parent);
+            var childTest = auth.RegisterUser("ChildTest", "ChildPass123!", UserRole.Child);
+            var unrelatedParent = auth.RegisterUser("UnrelatedParent", "UnrelatedPass123!", UserRole.Parent);
+
+            // 2. Register ChildTest's Windows device owned by ChildTest
+            var childDevice = new DeviceStatusRecord
+            {
+                DeviceId = "dev_child_test_pc",
+                DeviceName = "ChildTest Desktop",
+                ChildId = childTest.Id,
+                IsOnline = true,
+                LastSeen = DateTime.UtcNow
+            };
+            _db.SaveDeviceStatus(childDevice);
+
+            // Verify initial state: ParentTest does not see ChildTest or ChildTest's device yet
+            Assert.Empty(_db.GetChildrenForParent(parentTest.Id));
+            Assert.Empty(_db.GetDevicesForParent(parentTest.Id));
+
+            // 3. ParentTest sends request to ChildTest
+            var invitation = new ParentChildInvitation
+            {
+                Id = Guid.NewGuid().ToString(),
+                ParentUserId = parentTest.Id,
+                ParentUsername = parentTest.Username,
+                ChildUserId = childTest.Id,
+                ChildUsername = childTest.Username,
+                Status = InvitationStatus.Pending,
+                CreatedAt = DateTime.UtcNow,
+                ExpiresAt = DateTime.UtcNow.AddDays(7)
+            };
+            _db.SaveInvitation(invitation);
+
+            // 4. ChildTest sees request
+            var childPendingInvs = _db.GetPendingInvitationsForChild(childTest.Id);
+            Assert.Single(childPendingInvs);
+            Assert.Equal(parentTest.Username, childPendingInvs[0].ParentUsername);
+
+            // 5. ChildTest accepts request
+            _db.UpdateInvitationStatus(invitation.Id, InvitationStatus.Accepted, DateTime.UtcNow);
+            _db.SaveRelationship(new ParentChildRelationship
+            {
+                ParentUserId = parentTest.Id,
+                ChildUserId = childTest.Id,
+                CreatedAt = DateTime.UtcNow,
+                IsActive = true
+            });
+            _db.SaveChild(new ChildProfile
+            {
+                Id = Guid.NewGuid().ToString(),
+                ParentId = parentTest.Id,
+                UserId = childTest.Id,
+                Name = childTest.Username,
+                IsActive = true
+            });
+
+            // 6. ParentTest sees ChildTest
+            var childrenOfParent = _db.GetChildrenForParent(parentTest.Id);
+            Assert.Single(childrenOfParent);
+            Assert.Equal(childTest.Id, childrenOfParent[0].UserId);
+            Assert.Equal(childTest.Username, childrenOfParent[0].Name);
+
+            // 7. ChildTest's registered device appears for ParentTest
+            var parentDevices = _db.GetDevicesForParent(parentTest.Id);
+            Assert.Single(parentDevices);
+            Assert.Equal(childDevice.DeviceId, parentDevices[0].DeviceId);
+
+            // 8. ParentTest can access that device
+            Assert.True(_db.IsParentConnectedToChild(parentTest.Id, childTest.Id));
+
+            // 9. An unrelated parent cannot see it
+            Assert.False(_db.IsParentConnectedToChild(unrelatedParent.Id, childTest.Id));
+            Assert.Empty(_db.GetChildrenForParent(unrelatedParent.Id));
+            Assert.Empty(_db.GetDevicesForParent(unrelatedParent.Id));
         }
     }
 }

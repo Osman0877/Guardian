@@ -48,6 +48,48 @@
                 </Border>
             </Grid>
 
+            <!-- Parent Connection Requests Card -->
+            <Border Style="{StaticResource CardBorderStyle}" Margin="0,0,0,24" Background="{StaticResource SurfaceDarkBrush}">
+                <StackPanel>
+                    <Grid Margin="0,0,0,12">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="📩 Parent Connection Requests" FontSize="16" FontWeight="Bold" Foreground="White"/>
+                        </StackPanel>
+                        <Button Content="🔄 Refresh Requests" Style="{StaticResource SecondaryButtonStyle}" Height="30" Padding="10,2" Click="RefreshInvitations_Click" HorizontalAlignment="Right"/>
+                    </Grid>
+
+                    <TextBlock Text="When a parent sends a connection request to your Guardian username, it will appear here. You must Accept before the parent can manage this account or view devices." FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,0,0,14"/>
+
+                    <ListView x:Name="ChildInvitationsList" Background="Transparent" BorderThickness="0" Foreground="White">
+                        <ListView.ItemTemplate>
+                            <DataTemplate>
+                                <Border BorderBrush="{StaticResource BorderDarkBrush}" BorderThickness="0,0,0,1" Padding="12" Margin="0,0,0,8" Background="#1E293B" CornerRadius="6">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding ParentUsernameText}" FontSize="15" FontWeight="Bold" Foreground="White"/>
+                                            <TextBlock Text="{Binding RequestMetaText}" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,2,0,0"/>
+                                        </StackPanel>
+
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                            <Button Content="✓ Accept" Tag="{Binding Id}" Style="{StaticResource PrimaryButtonStyle}" Padding="14,6" Margin="0,0,8,0" Click="AcceptInvitation_Click"/>
+                                            <Button Content="❌ Decline" Tag="{Binding Id}" Style="{StaticResource DangerButtonStyle}" Padding="14,6" Click="DeclineInvitation_Click"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+
+                    <TextBlock x:Name="NoInvitationsText" Text="No pending parent connection requests." FontSize="12" Foreground="{StaticResource TextMutedBrush}" Margin="0,4,0,0"/>
+                    <TextBlock x:Name="InvitationActionResultText" Text="" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource SuccessGreenBrush}" Margin="0,8,0,0" Visibility="Collapsed"/>
+                </StackPanel>
+            </Border>
+
             <!-- Web Dashboard Account Connection Card -->
             <Border Style="{StaticResource CardBorderStyle}" Margin="0,0,0,24" Background="{StaticResource SurfaceDarkBrush}">
                 <StackPanel>

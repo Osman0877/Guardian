@@ -24,6 +24,13 @@ namespace GuardianWpf.Views
         public Brush ProgressBrush { get; set; } = Brushes.DodgerBlue;
     }
 
+    public class ChildInvitationItem
+    {
+        public string Id { get; set; } = "";
+        public string ParentUsernameText { get; set; } = "";
+        public string RequestMetaText { get; set; } = "";
+    }
+
     public partial class ChildDashboardView : UserControl
     {
         private readonly IDatabaseService _db;
@@ -40,6 +47,7 @@ namespace GuardianWpf.Views
             PopulateChildrenCombo();
             UpdateUI();
             CheckLinkedWebAccount();
+            _ = LoadPendingInvitationsAsync();
             _usage.OnUsageUpdated += () => Dispatcher.Invoke(UpdateUI);
         }
 
@@ -258,6 +266,165 @@ namespace GuardianWpf.Views
         {
             var dlg = new ChildRequestDialog(_db) { Owner = Window.GetWindow(this) };
             dlg.ShowDialog();
+        }
+
+        private async System.Threading.Tasks.Task LoadPendingInvitationsAsync()
+        {
+            var settings = _db.LoadSettings();
+            string childUsername = !string.IsNullOrWhiteSpace(settings.LinkedWebUsername)
+                ? settings.LinkedWebUsername
+                : (ActiveChildCombo.SelectedItem is ChildProfile cp ? cp.Name : "Alex");
+
+            var childUser = _db.GetUserByUsername(childUsername);
+            string childUserId = childUser?.Id ?? _usage.ActiveChildId;
+
+            var displayItems = new List<ChildInvitationItem>();
+
+            // Check local DB pending invitations
+            var pendingLocal = _db.GetPendingInvitationsForChild(childUserId);
+            foreach (var inv in pendingLocal)
+            {
+                displayItems.Add(new ChildInvitationItem
+                {
+                    Id = inv.Id,
+                    ParentUsernameText = $"👨 Parent Account: {inv.ParentUsername}",
+                    RequestMetaText = $"Requested connection on {inv.CreatedAt.ToLocalTime():g} • Status: Pending"
+                });
+            }
+
+            // Also check remote server if connected
+            try
+            {
+                using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+                string url = $"https://guardian-parent-server.onrender.com/api/family/invitations?childUserId={childUserId}";
+                var remoteInvs = await client.GetFromJsonAsync<List<ParentChildInvitation>>(url);
+                if (remoteInvs != null)
+                {
+                    foreach (var inv in remoteInvs)
+                    {
+                        if (inv.Status == InvitationStatus.Pending && !displayItems.Any(d => d.Id == inv.Id))
+                        {
+                            displayItems.Add(new ChildInvitationItem
+                            {
+                                Id = inv.Id,
+                                ParentUsernameText = $"👨 Parent Account: {inv.ParentUsername}",
+                                RequestMetaText = $"Requested connection on {inv.CreatedAt.ToLocalTime():g} • Status: Pending"
+                            });
+                        }
+                    }
+                }
+            }
+            catch { }
+
+            if (displayItems.Count > 0)
+            {
+                ChildInvitationsList.ItemsSource = displayItems;
+                ChildInvitationsList.Visibility = Visibility.Visible;
+                NoInvitationsText.Visibility = Visibility.Collapsed;
+            }
+            else
+            {
+                ChildInvitationsList.ItemsSource = null;
+                ChildInvitationsList.Visibility = Visibility.Collapsed;
+                NoInvitationsText.Visibility = Visibility.Visible;
+            }
+        }
+
+        private async void RefreshInvitations_Click(object sender, RoutedEventArgs e)
+        {
+            await LoadPendingInvitationsAsync();
+        }
+
+        private async void AcceptInvitation_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button btn && btn.Tag is string invId)
+            {
+                btn.IsEnabled = false;
+                var settings = _db.LoadSettings();
+                string childUsername = !string.IsNullOrWhiteSpace(settings.LinkedWebUsername)
+                    ? settings.LinkedWebUsername
+                    : (ActiveChildCombo.SelectedItem is ChildProfile cp ? cp.Name : "Alex");
+
+                var childUser = _db.GetUserByUsername(childUsername);
+                string childUserId = childUser?.Id ?? _usage.ActiveChildId;
+
+                bool success = false;
+                string message = "";
+
+                try
+                {
+                    using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
+                    string url = $"https://guardian-parent-server.onrender.com/api/family/invitations/{invId}/accept?childUserId={childUserId}";
+                    var res = await client.PostAsync(url, null);
+                    var content = await res.Content.ReadAsStringAsync();
+                    using var doc = System.Text.Json.JsonDocument.Parse(content);
+                    success = res.IsSuccessStatusCode && doc.RootElement.TryGetProperty("success", out var s) && s.GetBoolean();
+                    message = doc.RootElement.TryGetProperty("message", out var m) ? m.GetString() ?? "" : "";
+                }
+                catch { }
+
+                if (!success)
+                {
+                    var inv = _db.GetInvitation(invId);
+                    if (inv != null && inv.Status == InvitationStatus.Pending)
+                    {
+                        _db.UpdateInvitationStatus(inv.Id, InvitationStatus.Accepted, DateTime.UtcNow);
+                        _db.SaveRelationship(new ParentChildRelationship
+                        {
+                            ParentUserId = inv.ParentUserId,
+                            ChildUserId = inv.ChildUserId,
+                            IsActive = true
+                        });
+                        success = true;
+                        message = $"Successfully connected to parent '{inv.ParentUsername}'!";
+                    }
+                }
+
+                InvitationActionResultText.Visibility = Visibility.Visible;
+                if (success)
+                {
+                    InvitationActionResultText.Foreground = ThemeHelper.GetBrush("SuccessGreenBrush", Brushes.MediumSeaGreen);
+                    InvitationActionResultText.Text = $"✓ {(!string.IsNullOrEmpty(message) ? message : "Connected to parent!")}";
+                }
+                else
+                {
+                    InvitationActionResultText.Foreground = ThemeHelper.GetBrush("DangerRedBrush", Brushes.Crimson);
+                    InvitationActionResultText.Text = $"❌ Failed to accept invitation: {message}";
+                }
+
+                await LoadPendingInvitationsAsync();
+            }
+        }
+
+        private async void DeclineInvitation_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button btn && btn.Tag is string invId)
+            {
+                btn.IsEnabled = false;
+                var settings = _db.LoadSettings();
+                string childUsername = !string.IsNullOrWhiteSpace(settings.LinkedWebUsername)
+                    ? settings.LinkedWebUsername
+                    : (ActiveChildCombo.SelectedItem is ChildProfile cp ? cp.Name : "Alex");
+
+                var childUser = _db.GetUserByUsername(childUsername);
+                string childUserId = childUser?.Id ?? _usage.ActiveChildId;
+
+                try
+                {
+                    using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
+                    string url = $"https://guardian-parent-server.onrender.com/api/family/invitations/{invId}/decline?childUserId={childUserId}";
+                    await client.PostAsync(url, null);
+                }
+                catch { }
+
+                _db.UpdateInvitationStatus(invId, InvitationStatus.Declined, DateTime.UtcNow);
+
+                InvitationActionResultText.Visibility = Visibility.Visible;
+                InvitationActionResultText.Foreground = ThemeHelper.GetBrush("TextSecondaryBrush", Brushes.Gray);
+                InvitationActionResultText.Text = "Connection request declined.";
+
+                await LoadPendingInvitationsAsync();
+            }
         }
     }
 }

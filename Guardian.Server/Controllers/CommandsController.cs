@@ -66,6 +66,26 @@ namespace Guardian.Server.Controllers
                 return BadRequest(new { success = false, message = "Target DeviceId is required." });
             }
 
+            // Authorization Check: Parent must have an active relationship to command this child's device
+            if (!string.IsNullOrEmpty(parentId))
+            {
+                var targetDevice = _db.GetDeviceStatus(dto.DeviceId);
+                string targetChildUserId = targetDevice?.ChildId ?? dto.ChildId;
+
+                if (!string.IsNullOrEmpty(targetChildUserId) && targetChildUserId != "default")
+                {
+                    bool isConnected = _db.IsParentConnectedToChild(parentId, targetChildUserId);
+                    if (!isConnected)
+                    {
+                        return StatusCode(403, new
+                        {
+                            success = false,
+                            message = "Access denied. You do not have an active accepted connection to this child's device."
+                        });
+                    }
+                }
+            }
+
             var cmd = new RemoteCommand
             {
                 Id = Guid.NewGuid().ToString(),

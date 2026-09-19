@@ -40,6 +40,37 @@ namespace Guardian.Core.Models
         Success
     }
 
+    public enum InvitationStatus
+    {
+        Pending,
+        Accepted,
+        Declined,
+        Cancelled,
+        Expired
+    }
+
+    public class ParentChildInvitation
+    {
+        public string Id { get; set; } = Guid.NewGuid().ToString();
+        public string ParentUserId { get; set; } = string.Empty;
+        public string ParentUsername { get; set; } = string.Empty;
+        public string ChildUserId { get; set; } = string.Empty;
+        public string ChildUsername { get; set; } = string.Empty;
+        public InvitationStatus Status { get; set; } = InvitationStatus.Pending;
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime? RespondedAt { get; set; } = null;
+        public DateTime ExpiresAt { get; set; } = DateTime.UtcNow.AddDays(7);
+    }
+
+    public class ParentChildRelationship
+    {
+        public string Id { get; set; } = Guid.NewGuid().ToString();
+        public string ParentUserId { get; set; } = string.Empty;
+        public string ChildUserId { get; set; } = string.Empty;
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public bool IsActive { get; set; } = true;
+    }
+
     public class UserAccount
     {
         public string Id { get; set; } = Guid.NewGuid().ToString();

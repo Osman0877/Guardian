@@ -200,11 +200,24 @@
             <section id="tab-children" class="tab-content">
                 <div class="card">
                     <div class="card-header">
-                        <h3>Connected Children & Devices</h3>
-                        <button class="btn btn-primary btn-sm" onclick="promptCreateChildAccount()">+ Add Child Profile</button>
+                        <h3>👨‍👩‍👦 Family & Connected Children</h3>
+                        <div class="action-buttons">
+                            <button class="btn btn-primary btn-sm" onclick="promptConnectExistingChild()">+ Connect Existing Child</button>
+                            <button class="btn btn-secondary btn-sm" onclick="promptCreateChildAccount()">+ Create New Child Account</button>
+                        </div>
                     </div>
                     <div id="childrenList" class="children-grid mt-3">
-                        <div class="empty-state">No linked child profiles yet. Click "+ Add Child Profile" above to create one.</div>
+                        <div class="empty-state">No connected children yet. Click "+ Connect Existing Child" above or have your child accept a connection request.</div>
+                    </div>
+                </div>
+
+                <div class="card mt-4">
+                    <div class="card-header">
+                        <h3>📩 Outgoing Connection Requests</h3>
+                        <button class="btn btn-outline btn-sm" onclick="fetchInvitations()">🔄 Refresh</button>
+                    </div>
+                    <div id="invitationsList" class="mt-3">
+                        <div class="empty-state">No connection requests sent yet.</div>
                     </div>
                 </div>
             </section>

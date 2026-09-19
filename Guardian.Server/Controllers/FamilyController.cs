@@ -8,6 +8,11 @@ using Guardian.Core.Services;
 
 namespace Guardian.Server.Controllers
 {
+    public class SendInvitationDto
+    {
+        public string ChildUsername { get; set; } = string.Empty;
+    }
+
     [ApiController]
     [Route("api/[controller]")]
     public class FamilyController : ControllerBase
@@ -22,11 +27,10 @@ namespace Guardian.Server.Controllers
         [HttpGet("children")]
         public IActionResult GetChildren()
         {
-            string parentId = GetAuthenticatedParentId();
+            string parentId = GetAuthenticatedUserId();
             if (string.IsNullOrEmpty(parentId))
             {
-                var allChildren = _db.GetAllChildren();
-                return Ok(allChildren);
+                return Ok(new List<ChildProfile>());
             }
 
             var children = _db.GetChildrenForParent(parentId);
@@ -36,15 +40,227 @@ namespace Guardian.Server.Controllers
         [HttpGet("devices")]
         public IActionResult GetDevices()
         {
-            string parentId = GetAuthenticatedParentId();
+            string parentId = GetAuthenticatedUserId();
             if (string.IsNullOrEmpty(parentId))
             {
-                var allDevices = _db.GetAllDeviceStatuses();
-                return Ok(allDevices);
+                return Ok(new List<DeviceStatusRecord>());
             }
 
             var devices = _db.GetDevicesForParent(parentId);
             return Ok(devices);
+        }
+
+        [HttpPost("invitations")]
+        public IActionResult SendInvitation([FromBody] SendInvitationDto dto)
+        {
+            string parentId = GetAuthenticatedUserId();
+            if (string.IsNullOrEmpty(parentId))
+            {
+                return Unauthorized(new { success = false, message = "Authentication required." });
+            }
+
+            if (string.IsNullOrWhiteSpace(dto.ChildUsername))
+            {
+                return BadRequest(new { success = false, message = "Child's Guardian username is required." });
+            }
+
+            string cleanChildUsername = dto.ChildUsername.Trim();
+            var childUser = _db.GetUserByUsername(cleanChildUsername);
+
+            if (childUser == null)
+            {
+                return NotFound(new { success = false, message = $"Child account '{cleanChildUsername}' not found. Verify the child's exact Guardian username." });
+            }
+
+            if (childUser.Id == parentId)
+            {
+                return BadRequest(new { success = false, message = "You cannot send a connection request to your own parent account." });
+            }
+
+            // Verify if active relationship already exists
+            if (_db.IsParentConnectedToChild(parentId, childUser.Id))
+            {
+                return BadRequest(new { success = false, message = $"You are already connected to child '{childUser.Username}'." });
+            }
+
+            // Verify if invitation is already pending
+            var existingInvitations = _db.GetInvitationsForParent(parentId);
+            if (existingInvitations.Exists(i => i.ChildUserId == childUser.Id && i.Status == InvitationStatus.Pending && i.ExpiresAt > DateTime.UtcNow))
+            {
+                return BadRequest(new { success = false, message = $"A connection request is already pending for '{childUser.Username}'." });
+            }
+
+            var parentUser = _db.GetUserById(parentId);
+            string parentUsername = parentUser?.Username ?? User.Identity?.Name ?? "Parent";
+
+            var inv = new ParentChildInvitation
+            {
+                Id = Guid.NewGuid().ToString(),
+                ParentUserId = parentId,
+                ParentUsername = parentUsername,
+                ChildUserId = childUser.Id,
+                ChildUsername = childUser.Username,
+                Status = InvitationStatus.Pending,
+                CreatedAt = DateTime.UtcNow,
+                ExpiresAt = DateTime.UtcNow.AddDays(7)
+            };
+
+            _db.SaveInvitation(inv);
+            _db.LogIncident("INVITATION_SENT", parentUsername, $"Sent connection request to child '{childUser.Username}'.");
+
+            return Ok(new
+            {
+                success = true,
+                invitation = inv,
+                message = $"Connection request sent to '{childUser.Username}'. Status: Pending until accepted by child."
+            });
+        }
+
+        [HttpGet("invitations")]
+        public IActionResult GetInvitations([FromQuery] string? childUserId)
+        {
+            string userId = GetAuthenticatedUserId();
+
+            if (!string.IsNullOrEmpty(childUserId))
+            {
+                var pending = _db.GetPendingInvitationsForChild(childUserId);
+                return Ok(pending);
+            }
+
+            if (string.IsNullOrEmpty(userId))
+            {
+                return Ok(new List<ParentChildInvitation>());
+            }
+
+            var role = User.FindFirst(ClaimTypes.Role)?.Value ?? "Parent";
+            if (role == "Child")
+            {
+                var pending = _db.GetPendingInvitationsForChild(userId);
+                return Ok(pending);
+            }
+
+            var parentInvs = _db.GetInvitationsForParent(userId);
+            return Ok(parentInvs);
+        }
+
+        [HttpPost("invitations/{id}/accept")]
+        public IActionResult AcceptInvitation(string id, [FromQuery] string? childUserId)
+        {
+            string authenticatedUserId = GetAuthenticatedUserId();
+            string effectiveChildUserId = !string.IsNullOrEmpty(authenticatedUserId) ? authenticatedUserId : (childUserId ?? "");
+
+            var inv = _db.GetInvitation(id);
+            if (inv == null)
+            {
+                return NotFound(new { success = false, message = "Invitation not found." });
+            }
+
+            // Security Authorization Check: Verify target child identity
+            if (!string.IsNullOrEmpty(effectiveChildUserId) && inv.ChildUserId != effectiveChildUserId)
+            {
+                var childUser = _db.GetUserById(effectiveChildUserId);
+                if (childUser == null || !childUser.Username.Equals(inv.ChildUsername, StringComparison.OrdinalIgnoreCase))
+                {
+                    return StatusCode(403, new { success = false, message = "You are not authorized to accept this invitation." });
+                }
+            }
+
+            if (inv.Status != InvitationStatus.Pending || DateTime.UtcNow > inv.ExpiresAt)
+            {
+                return BadRequest(new { success = false, message = "Invitation is no longer valid or has expired." });
+            }
+
+            _db.UpdateInvitationStatus(inv.Id, InvitationStatus.Accepted, DateTime.UtcNow);
+
+            var rel = new ParentChildRelationship
+            {
+                Id = Guid.NewGuid().ToString(),
+                ParentUserId = inv.ParentUserId,
+                ChildUserId = inv.ChildUserId,
+                CreatedAt = DateTime.UtcNow,
+                IsActive = true
+            };
+            _db.SaveRelationship(rel);
+
+            // Create/link child profile record if missing
+            var existingChildren = _db.GetAllChildren();
+            var profile = existingChildren.Find(c => c.UserId == inv.ChildUserId || c.Name.Equals(inv.ChildUsername, StringComparison.OrdinalIgnoreCase));
+            if (profile == null)
+            {
+                profile = new ChildProfile
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    ParentId = inv.ParentUserId,
+                    UserId = inv.ChildUserId,
+                    Name = inv.ChildUsername,
+                    IsActive = true
+                };
+            }
+            else
+            {
+                profile.ParentId = inv.ParentUserId;
+                profile.UserId = inv.ChildUserId;
+            }
+            _db.SaveChild(profile);
+
+            _db.LogIncident("INVITATION_ACCEPTED", inv.ChildUsername, $"Child '{inv.ChildUsername}' accepted connection request from parent '{inv.ParentUsername}'.");
+
+            return Ok(new
+            {
+                success = true,
+                message = $"Successfully connected to parent '{inv.ParentUsername}'!"
+            });
+        }
+
+        [HttpPost("invitations/{id}/decline")]
+        public IActionResult DeclineInvitation(string id, [FromQuery] string? childUserId)
+        {
+            string authenticatedUserId = GetAuthenticatedUserId();
+            string effectiveChildUserId = !string.IsNullOrEmpty(authenticatedUserId) ? authenticatedUserId : (childUserId ?? "");
+
+            var inv = _db.GetInvitation(id);
+            if (inv == null)
+            {
+                return NotFound(new { success = false, message = "Invitation not found." });
+            }
+
+            if (!string.IsNullOrEmpty(effectiveChildUserId) && inv.ChildUserId != effectiveChildUserId)
+            {
+                var childUser = _db.GetUserById(effectiveChildUserId);
+                if (childUser == null || !childUser.Username.Equals(inv.ChildUsername, StringComparison.OrdinalIgnoreCase))
+                {
+                    return StatusCode(403, new { success = false, message = "You are not authorized to decline this invitation." });
+                }
+            }
+
+            _db.UpdateInvitationStatus(inv.Id, InvitationStatus.Declined, DateTime.UtcNow);
+            _db.LogIncident("INVITATION_DECLINED", inv.ChildUsername, $"Child '{inv.ChildUsername}' declined connection request from parent '{inv.ParentUsername}'.");
+
+            return Ok(new
+            {
+                success = true,
+                message = "Connection request declined."
+            });
+        }
+
+        [HttpPost("invitations/{id}/cancel")]
+        public IActionResult CancelInvitation(string id)
+        {
+            string parentId = GetAuthenticatedUserId();
+
+            var inv = _db.GetInvitation(id);
+            if (inv == null)
+            {
+                return NotFound(new { success = false, message = "Invitation not found." });
+            }
+
+            if (!string.IsNullOrEmpty(parentId) && inv.ParentUserId != parentId)
+            {
+                return StatusCode(403, new { success = false, message = "You are not authorized to cancel this invitation." });
+            }
+
+            _db.UpdateInvitationStatus(inv.Id, InvitationStatus.Cancelled, DateTime.UtcNow);
+            return Ok(new { success = true, message = "Connection request cancelled." });
         }
 
         [HttpGet("app-rules")]
@@ -66,7 +282,7 @@ namespace Guardian.Server.Controllers
         {
             if (string.IsNullOrWhiteSpace(childId))
             {
-                string parentId = GetAuthenticatedParentId();
+                string parentId = GetAuthenticatedUserId();
                 var children = _db.GetChildrenForParent(parentId);
                 if (children.Count > 0) childId = children[0].Id;
             }
@@ -80,7 +296,7 @@ namespace Guardian.Server.Controllers
             return Ok(usage);
         }
 
-        private string GetAuthenticatedParentId()
+        private string GetAuthenticatedUserId()
         {
             if (User.Identity?.IsAuthenticated == true)
             {

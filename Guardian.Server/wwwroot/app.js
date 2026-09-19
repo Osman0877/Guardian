@@ -143,12 +143,103 @@ function initSignalR() {
 
 async function loadDashboardData() {
     fetchChildrenAndDevices();
+    fetchInvitations();
     fetchAppRules();
     fetchWebRules();
     fetchTimeRequests();
     fetchAfkLogs();
     fetchRecentCommands();
     fetchActivityLogs();
+}
+
+async function fetchInvitations() {
+    try {
+        const headers = { 'Authorization': `Bearer ${authToken}` };
+        const res = await fetch('/api/family/invitations', { headers });
+        const invitations = await res.json();
+        renderInvitationsList(invitations || []);
+    } catch (err) {
+        console.error('Failed to fetch invitations:', err);
+    }
+}
+
+function renderInvitationsList(invitations) {
+    const container = document.getElementById('invitationsList');
+    if (!container) return;
+    container.innerHTML = '';
+
+    if (!invitations || invitations.length === 0) {
+        container.innerHTML = '<div class="empty-state">No connection requests sent yet.</div>';
+        return;
+    }
+
+    invitations.forEach(inv => {
+        let badgeClass = 'tag-pending';
+        let badgeText = inv.status;
+        if (inv.status === 'Accepted') badgeClass = 'tag-online';
+        if (inv.status === 'Declined' || inv.status === 'Expired' || inv.status === 'Cancelled') badgeClass = 'tag-offline';
+
+        const item = document.createElement('div');
+        item.className = 'device-pill mt-2';
+        item.style.display = 'flex';
+        item.style.justifyContent = 'space-between';
+        item.style.alignItems = 'center';
+
+        let cancelBtn = inv.status === 'Pending' ? `<button class="btn btn-sm btn-danger" onclick="cancelInvitation('${inv.id}')">Cancel Request</button>` : '';
+
+        item.innerHTML = `
+            <div>
+                <strong>Child Username: ${inv.childUsername}</strong> — <span class="tag ${badgeClass}">${badgeText}</span>
+                <div class="text-muted" style="font-size: 11px; margin-top: 2px;">Sent: ${new Date(inv.createdAt).toLocaleString()} ${inv.respondedAt ? ' • Responded: ' + new Date(inv.respondedAt).toLocaleString() : ''}</div>
+            </div>
+            <div>${cancelBtn}</div>
+        `;
+        container.appendChild(item);
+    });
+}
+
+async function promptConnectExistingChild() {
+    const username = prompt("Enter Child's Guardian Username (e.g. Kid123):");
+    if (!username || !username.trim()) return;
+
+    try {
+        const res = await fetch('/api/family/invitations', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+            },
+            body: JSON.stringify({ childUsername: username.trim() })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+            showToast(`✓ Connection request sent to ${username.trim()}! Status: Pending`);
+            fetchInvitations();
+        } else {
+            alert(data.message || 'Failed to send connection request.');
+        }
+    } catch (err) {
+        console.error('Error sending invitation:', err);
+    }
+}
+
+async function cancelInvitation(id) {
+    if (!confirm('Are you sure you want to cancel this connection request?')) return;
+    try {
+        const res = await fetch(`/api/family/invitations/${id}/cancel`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+            showToast('✓ Connection request cancelled.');
+            fetchInvitations();
+        } else {
+            alert(data.message || 'Failed to cancel invitation.');
+        }
+    } catch (err) {
+        console.error('Error cancelling invitation:', err);
+    }
 }
 
 async function fetchChildrenAndDevices() {
@@ -181,7 +272,7 @@ function renderChildrenGrid(children, devices) {
     if (childSelect) childSelect.innerHTML = '<option value="">Select Child</option>';
 
     if (!children || children.length === 0) {
-        container.innerHTML = '<div class="empty-state">No linked child profiles yet. Click "+ Add Child Profile" above to create one.</div>';
+        container.innerHTML = '<div class="empty-state">No connected children yet. Click "+ Connect Existing Child" above or have your child accept a connection request.</div>';
         return;
     }
 

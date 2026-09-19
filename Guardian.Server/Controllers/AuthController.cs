@@ -236,6 +236,17 @@ namespace Guardian.Server.Controllers
                 };
 
                 _db.SaveChild(childProfile);
+
+                var rel = new ParentChildRelationship
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    ParentUserId = parentId,
+                    ChildUserId = childUser.Id,
+                    CreatedAt = DateTime.UtcNow,
+                    IsActive = true
+                };
+                _db.SaveRelationship(rel);
+
                 _db.LogIncident("CHILD_CREATED", childUser.Username, $"Parent '{parentId}' created child profile '{request.Name}'.");
 
                 return Ok(new { success = true, childId = childProfile.Id, message = "Child profile created successfully." });
