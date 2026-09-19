@@ -12,21 +12,27 @@
 </head>
 <body class="dark-theme">
 
-    <!-- LOGIN SCREEN -->
+    <!-- AUTHENTICATION SCREEN (LOGIN & REGISTER) -->
     <div id="loginView" class="auth-wrapper">
         <div class="auth-card">
             <div class="auth-header">
                 <div class="brand-badge">🛡️ GUARDIAN</div>
-                <h2>Parent Login</h2>
-                <p>Manage family safety and child devices remotely</p>
+                <h2 id="authCardTitle">Parent Login</h2>
+                <p id="authCardSubtitle">Manage family safety and child devices remotely</p>
             </div>
 
-            <form id="loginForm" onsubmit="handleLogin(event)">
+            <div id="authTabs" class="tab-buttons mb-3" style="display: flex; gap: 10px; justify-content: center;">
+                <button type="button" id="tabBtnLogin" class="btn btn-sm btn-primary" onclick="toggleAuthMode('login')">Log In</button>
+                <button type="button" id="tabBtnRegister" class="btn btn-sm btn-secondary" onclick="toggleAuthMode('register')">Create Account</button>
+            </div>
+
+            <form id="authForm" onsubmit="handleAuthSubmit(event)">
                 <div id="loginError" class="alert error-alert" style="display: none;"></div>
-                
+                <div id="loginSuccess" class="alert success-alert" style="display: none;"></div>
+
                 <div class="form-group">
                     <label for="username">Username</label>
-                    <input type="text" id="username" placeholder="e.g. MasterDad" required autocomplete="username">
+                    <input type="text" id="username" placeholder="Parent username" required autocomplete="username">
                 </div>
 
                 <div class="form-group">
@@ -35,10 +41,6 @@
                 </div>
 
                 <button type="submit" id="loginBtn" class="btn btn-primary btn-block">Log In</button>
-                
-                <div class="auth-footer">
-                    <a href="#" onclick="alert('Please reset your master password inside the Guardian Windows Application settings.')">Forgot Password?</a>
-                </div>
             </form>
         </div>
     </div>
@@ -82,7 +84,7 @@
             <div class="user-profile-widget">
                 <div class="avatar">👨‍👩‍👦</div>
                 <div class="info">
-                    <div id="parentNameDisplay" class="name">MasterDad</div>
+                    <div id="parentNameDisplay" class="name">Parent</div>
                     <div class="role">Parent Account</div>
                 </div>
                 <button class="btn-logout" title="Log Out" onclick="handleLogout()">🚪</button>
@@ -113,21 +115,21 @@
                         <div class="card-icon">💻</div>
                         <div class="stat-body">
                             <span class="stat-label">Connected Devices</span>
-                            <h3 id="statOnlineDevices">1 Online</h3>
+                            <h3 id="statOnlineDevices">0 Online</h3>
                         </div>
                     </div>
                     <div class="card stat-card">
                         <div class="card-icon">⏳</div>
                         <div class="stat-body">
-                            <span class="stat-label">Alex's Screen Time Today</span>
-                            <h3 id="statScreenTime">1h 24m / 2h 00m</h3>
+                            <span class="stat-label">Screen Time Today</span>
+                            <h3 id="statScreenTime">No activity recorded</h3>
                         </div>
                     </div>
                     <div class="card stat-card">
                         <div class="card-icon">🛡️</div>
                         <div class="stat-body">
                             <span class="stat-label">Protection System</span>
-                            <h3 id="statProtection">Active & Healthy</h3>
+                            <h3 id="statProtection">Active</h3>
                         </div>
                     </div>
                 </div>
@@ -138,19 +140,20 @@
                         <div class="device-info">
                             <span class="device-icon">🖥️</span>
                             <div>
-                                <h3 id="heroDeviceName">Alex Gaming PC</h3>
+                                <h3 id="heroDeviceName">No Connected Device</h3>
                                 <p class="device-meta">
-                                    <span id="heroDeviceStatus" class="tag tag-online">● Online</span>
+                                    <span id="heroDeviceStatus" class="tag tag-offline">○ Offline</span>
                                     <span class="separator">•</span>
-                                    Last Seen: <span id="heroLastSeen">Just now</span>
+                                    Last Seen: <span id="heroLastSeen">Never</span>
                                     <span class="separator">•</span>
-                                    Current App: <strong id="heroCurrentApp">Roblox</strong>
+                                    Current App: <strong id="heroCurrentApp">No activity recorded</strong>
                                 </p>
                             </div>
                         </div>
 
                         <div class="action-buttons">
                             <button class="btn btn-danger" onclick="triggerRemoteLock()">🔒 Lock Device</button>
+                            <button class="btn btn-secondary" onclick="triggerRemoteUnlock()">🔓 Unlock Device</button>
                             <button class="btn btn-success" onclick="toggleRemoteAfkModal()">🟢 AFK Mode</button>
                         </div>
                     </div>
@@ -158,10 +161,10 @@
                     <div class="progress-bar-container mt-3">
                         <div class="progress-labels">
                             <span>Daily Limit Progress</span>
-                            <span id="screenTimePercentage">70%</span>
+                            <span id="screenTimePercentage">0%</span>
                         </div>
                         <div class="progress-bar">
-                            <div id="screenTimeProgressFill" class="progress-fill" style="width: 70%;"></div>
+                            <div id="screenTimeProgressFill" class="progress-fill" style="width: 0%;"></div>
                         </div>
                     </div>
                 </div>
@@ -195,9 +198,12 @@
             <!-- CHILDREN & DEVICES TAB -->
             <section id="tab-children" class="tab-content">
                 <div class="card">
-                    <h3>Connected Children & Devices</h3>
+                    <div class="card-header">
+                        <h3>Connected Children & Devices</h3>
+                        <button class="btn btn-primary btn-sm" onclick="promptCreateChildAccount()">+ Add Child Profile</button>
+                    </div>
                     <div id="childrenList" class="children-grid mt-3">
-                        <!-- Populated dynamically -->
+                        <div class="empty-state">No linked child profiles yet. Click "+ Add Child Profile" above to create one.</div>
                     </div>
                 </div>
             </section>
@@ -210,7 +216,7 @@
                         <div class="form-group flex-1">
                             <label>Child</label>
                             <select id="screenTimeChildSelect" class="form-control">
-                                <option value="default">Alex (Default)</option>
+                                <option value="">Select Child</option>
                             </select>
                         </div>
                         <div class="form-group flex-1">
@@ -239,7 +245,7 @@
                 <div class="card">
                     <div class="card-header">
                         <h3>🚫 Manage Application Rules</h3>
-                        <button class="btn btn-primary btn-sm" onclick="promptBlockCustomApp()">+ Block Custom App</button>
+                        <button class="btn btn-primary btn-sm" onclick="promptBlockCustomApp()">+ Block Application</button>
                     </div>
                     <div class="table-responsive mt-3">
                         <table class="data-table">
@@ -253,7 +259,7 @@
                                 </tr>
                             </thead>
                             <tbody id="appRulesTableBody">
-                                <!-- Populated dynamically -->
+                                <tr><td colspan="5" class="text-center text-muted">No application rules configured yet.</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -267,7 +273,7 @@
                     <div class="form-row mt-3">
                         <div class="form-group flex-2">
                             <label>Website Domain to Block</label>
-                            <input type="text" id="webDomainInput" class="form-control" placeholder="e.g. youtube.com or *.roblox.com">
+                            <input type="text" id="webDomainInput" class="form-control" placeholder="e.g. tiktok.com">
                         </div>
                         <div class="form-group align-end">
                             <button class="btn btn-danger" onclick="blockWebsite()">Block Website</button>
@@ -286,7 +292,7 @@
                                 </tr>
                             </thead>
                             <tbody id="webRulesTableBody">
-                                <!-- Populated dynamically -->
+                                <tr><td colspan="4" class="text-center text-muted">No blocked website domains configured.</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -298,7 +304,7 @@
                 <div class="card">
                     <h3>📩 Child Time Requests</h3>
                     <div id="allRequestsList" class="requests-feed mt-3">
-                        <!-- Populated dynamically -->
+                        <div class="empty-state">No time requests recorded yet.</div>
                     </div>
                 </div>
             </section>
@@ -340,7 +346,7 @@
                                 </tr>
                             </thead>
                             <tbody id="afkLogsTableBody">
-                                <!-- Populated dynamically -->
+                                <tr><td colspan="6" class="text-center text-muted">No AFK sessions recorded yet.</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -352,7 +358,7 @@
                 <div class="card">
                     <h3>📜 Activity Stream & System Logs</h3>
                     <div id="activityStreamFeed" class="activity-feed mt-3">
-                        <!-- Populated dynamically -->
+                        <div class="empty-state">No activity recorded yet.</div>
                     </div>
                 </div>
             </section>
@@ -363,7 +369,7 @@
     <div id="lockModal" class="modal-backdrop" style="display: none;">
         <div class="modal-box">
             <h3>🔒 Remote Lock Device</h3>
-            <p>Are you sure you want to lock <strong>Alex Gaming PC</strong> immediately?</p>
+            <p>Are you sure you want to lock the selected child device immediately?</p>
             <div class="modal-actions">
                 <button class="btn btn-secondary" onclick="closeLockModal()">Cancel</button>
                 <button class="btn btn-danger" onclick="confirmRemoteLock()">Lock Device</button>
@@ -375,7 +381,7 @@
     <div id="afkModal" class="modal-backdrop" style="display: none;">
         <div class="modal-box">
             <h3>🟢 Remote AFK Mode</h3>
-            <p>Activate AFK Mode on <strong>Alex Gaming PC</strong> to pause screen-time counting.</p>
+            <p>Activate AFK Mode to pause screen-time counting on child device.</p>
             
             <div class="form-group">
                 <label>Duration</label>

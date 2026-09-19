@@ -68,6 +68,14 @@ namespace Guardian.Core.Services
         void UpdateCommandStatus(string id, CommandStatus status, string? errorMessage = null);
         List<RemoteCommand> GetRecentCommands(int limit = 50);
 
+        // User Accounts & Parent/Child Relationships
+        UserAccount? GetUserByUsername(string username);
+        UserAccount? GetUserById(string id);
+        void SaveUserAccount(UserAccount user);
+        List<ChildProfile> GetChildrenForParent(string parentId);
+        List<DeviceStatusRecord> GetDevicesForParent(string parentId);
+        List<DeviceStatusRecord> GetDevicesForChild(string childId);
+
         void SaveDeviceStatus(DeviceStatusRecord status);
         DeviceStatusRecord? GetDeviceStatus(string deviceId);
         List<DeviceStatusRecord> GetAllDeviceStatuses();
@@ -114,12 +122,34 @@ namespace Guardian.Core.Services
                     );
                     CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 
-                    -- 2. Users
+                    -- 2. Users & UserAccounts
                     CREATE TABLE IF NOT EXISTS Users (
                         id TEXT PRIMARY KEY,
                         username TEXT NOT NULL,
                         role TEXT NOT NULL,
                         created_at TEXT NOT NULL
+                    );
+                    CREATE TABLE IF NOT EXISTS UserAccounts (
+                        id TEXT PRIMARY KEY,
+                        username TEXT NOT NULL,
+                        normalized_username TEXT NOT NULL UNIQUE,
+                        password_hash TEXT NOT NULL,
+                        password_salt TEXT NOT NULL,
+                        role TEXT NOT NULL DEFAULT 'Parent',
+                        parent_id TEXT NOT NULL DEFAULT '',
+                        created_at TEXT NOT NULL,
+                        is_active INTEGER NOT NULL DEFAULT 1
+                    );
+                    CREATE TABLE IF NOT EXISTS user_accounts (
+                        id TEXT PRIMARY KEY,
+                        username TEXT NOT NULL,
+                        normalized_username TEXT NOT NULL UNIQUE,
+                        password_hash TEXT NOT NULL,
+                        password_salt TEXT NOT NULL,
+                        role TEXT NOT NULL DEFAULT 'Parent',
+                        parent_id TEXT NOT NULL DEFAULT '',
+                        created_at TEXT NOT NULL,
+                        is_active INTEGER NOT NULL DEFAULT 1
                     );
 
                     -- 3. ParentAuthentication
@@ -426,7 +456,14 @@ namespace Guardian.Core.Services
                     "ALTER TABLE AppUsage ADD COLUMN child_id TEXT NOT NULL DEFAULT 'default';",
 
                     "ALTER TABLE requests ADD COLUMN child_name TEXT NOT NULL DEFAULT 'Alex';",
-                    "ALTER TABLE TimeRequests ADD COLUMN child_name TEXT NOT NULL DEFAULT 'Alex';"
+                    "ALTER TABLE TimeRequests ADD COLUMN child_name TEXT NOT NULL DEFAULT 'Alex';",
+
+                    "ALTER TABLE children ADD COLUMN parent_id TEXT NOT NULL DEFAULT '';",
+                    "ALTER TABLE children ADD COLUMN user_id TEXT NOT NULL DEFAULT '';",
+                    "ALTER TABLE Children ADD COLUMN parent_id TEXT NOT NULL DEFAULT '';",
+                    "ALTER TABLE Children ADD COLUMN user_id TEXT NOT NULL DEFAULT '';",
+                    "ALTER TABLE DeviceStatuses ADD COLUMN parent_id TEXT NOT NULL DEFAULT '';",
+                    "ALTER TABLE RemoteCommands ADD COLUMN expires_at TEXT NOT NULL DEFAULT '';"
                 };
 
                 foreach (var sql in columnMigrations)
@@ -438,79 +475,6 @@ namespace Guardian.Core.Services
                         mCmd.ExecuteNonQuery();
                     }
                     catch { /* Column already exists */ }
-                }
-
-                // Seed Default Child Profile if empty
-                cmd.CommandText = "SELECT COUNT(*) FROM children;";
-                long childCount = (long)(cmd.ExecuteScalar() ?? 0L);
-                if (childCount == 0)
-                {
-                    cmd.CommandText = @"
-                        INSERT INTO children (id, name, avatar, age, is_active, daily_limit_minutes, bedtime, bedtime_enabled, created_at)
-                        VALUES ('default', 'Alex', '👦', 11, 1, 120, '21:30:00', 1, @now),
-                               ('child_2', 'Emma', '👧', 8, 0, 90, '20:30:00', 1, @now);
-                    ";
-                    cmd.Parameters.AddWithValue("@now", DateTime.Now.ToString("o"));
-                    cmd.ExecuteNonQuery();
-                }
-
-                // Seed Advanced Schedules if empty
-                cmd.CommandText = "SELECT COUNT(*) FROM advanced_schedules;";
-                long schedCount = (long)(cmd.ExecuteScalar() ?? 0L);
-                if (schedCount == 0)
-                {
-                    cmd.CommandText = @"
-                        INSERT INTO advanced_schedules (day_of_week, limit_minutes, has_allowed_hours, start_time, end_time, bedtime_enabled, bedtime) VALUES
-                        (0, 180, 0, '09:00:00', '21:30:00', 1, '21:30:00'), -- Sunday
-                        (1, 120, 1, '16:00:00', '20:00:00', 1, '21:00:00'), -- Monday
-                        (2, 120, 1, '16:00:00', '20:00:00', 1, '21:00:00'), -- Tuesday
-                        (3, 90,  1, '15:30:00', '19:30:00', 1, '21:00:00'), -- Wednesday
-                        (4, 120, 1, '16:00:00', '20:00:00', 1, '21:00:00'), -- Thursday
-                        (5, 180, 1, '16:00:00', '22:00:00', 1, '22:00:00'), -- Friday
-                        (6, 240, 0, '09:00:00', '22:00:00', 1, '22:00:00'); -- Saturday
-                    ";
-                    cmd.ExecuteNonQuery();
-                }
-
-                // Seed Web Rules if empty
-                cmd.CommandText = "SELECT COUNT(*) FROM web_rules;";
-                long webCount = (long)(cmd.ExecuteScalar() ?? 0L);
-                if (webCount == 0)
-                {
-                    cmd.CommandText = @"
-                        INSERT INTO web_rules (domain, category, is_blocked, reason, created_at) VALUES
-                        ('tiktok.com', 'Social Media', 1, 'Parental Block', @now),
-                        ('instagram.com', 'Social Media', 0, 'Monitored', @now),
-                        ('roblox.com', 'Gaming', 0, 'Allowed Gaming', @now),
-                        ('youtube.com', 'Media & Video', 0, 'Allowed Media', @now),
-                        ('discord.com', 'Chat & Voice', 1, 'Age Restricted', @now),
-                        ('twitch.tv', 'Live Streaming', 1, 'Bandwidth & Time Limit', @now),
-                        ('bet365.com', 'Gambling', 1, 'Age Restricted Gambling', @now);
-                    ";
-                    cmd.Parameters.Clear();
-                    cmd.Parameters.AddWithValue("@now", DateTime.Now.ToString("o"));
-                    cmd.ExecuteNonQuery();
-                }
-
-                // Seed Default App Rules if empty
-                cmd.CommandText = "SELECT COUNT(*) FROM app_rules;";
-                long appCount = (long)(cmd.ExecuteScalar() ?? 0L);
-                if (appCount == 0)
-                {
-                    cmd.CommandText = @"
-                        INSERT INTO app_rules (process_name, display_name, is_blocked, daily_limit_minutes, category) VALUES
-                        ('robloxplayerbeta', 'Roblox', 0, 45, 'Games'),
-                        ('chrome', 'Google Chrome', 0, 0, 'Browsers'),
-                        ('msedge', 'Microsoft Edge', 0, 0, 'Browsers'),
-                        ('discord', 'Discord', 1, 0, 'Communication'),
-                        ('steam', 'Steam', 0, 60, 'Games'),
-                        ('minecraft.windows', 'Minecraft', 0, 60, 'Games'),
-                        ('fortniteclient-win64-shipping', 'Fortnite', 0, 60, 'Games'),
-                        ('spotify', 'Spotify', 0, 0, 'Media'),
-                        ('cmd', 'Command Prompt', 1, 0, 'Utilities'),
-                        ('powershell', 'Windows PowerShell', 1, 0, 'Utilities');
-                    ";
-                    cmd.ExecuteNonQuery();
                 }
             }
         }
@@ -534,6 +498,7 @@ namespace Guardian.Core.Services
 
                     switch (key)
                     {
+                        case "DeviceId": s.DeviceId = val; break;
                         case "ActiveRole": if (Enum.TryParse<UserRole>(val, out var role)) s.ActiveRole = role; break;
                         case "ActiveChildId": s.ActiveChildId = val; break;
                         case "PasswordHash": s.PasswordHash = val; break;
@@ -562,6 +527,7 @@ namespace Guardian.Core.Services
 
                 var dict = new Dictionary<string, string>
                 {
+                    { "DeviceId", s.DeviceId ?? "" },
                     { "ActiveRole", s.ActiveRole.ToString() },
                     { "ActiveChildId", s.ActiveChildId },
                     { "PasswordHash", s.PasswordHash },
@@ -599,7 +565,7 @@ namespace Guardian.Core.Services
                 conn.Open();
 
                 using var cmd = conn.CreateCommand();
-                cmd.CommandText = "SELECT id, name, avatar, age, is_active, daily_limit_minutes, bedtime, bedtime_enabled, created_at FROM children ORDER BY name;";
+                cmd.CommandText = "SELECT id, name, avatar, age, is_active, daily_limit_minutes, bedtime, bedtime_enabled, created_at, parent_id, user_id FROM children ORDER BY name;";
                 using var reader = cmd.ExecuteReader();
 
                 while (reader.Read())
@@ -614,7 +580,9 @@ namespace Guardian.Core.Services
                         DailyLimitMinutes = reader.GetInt32(5),
                         Bedtime = TimeSpan.TryParse(reader.GetString(6), out var bt) ? bt : new TimeSpan(21, 30, 0),
                         BedtimeEnabled = reader.GetInt32(7) == 1,
-                        CreatedAt = DateTime.TryParse(reader.GetString(8), out var ca) ? ca : DateTime.Now
+                        CreatedAt = DateTime.TryParse(reader.GetString(8), out var ca) ? ca : DateTime.Now,
+                        ParentId = reader.IsDBNull(9) ? "" : reader.GetString(9),
+                        UserId = reader.IsDBNull(10) ? "" : reader.GetString(10)
                     });
                 }
                 return list;
@@ -629,7 +597,7 @@ namespace Guardian.Core.Services
                 conn.Open();
 
                 using var cmd = conn.CreateCommand();
-                cmd.CommandText = "SELECT id, name, avatar, age, is_active, daily_limit_minutes, bedtime, bedtime_enabled, created_at FROM children WHERE id = @id;";
+                cmd.CommandText = "SELECT id, name, avatar, age, is_active, daily_limit_minutes, bedtime, bedtime_enabled, created_at, parent_id, user_id FROM children WHERE id = @id;";
                 cmd.Parameters.AddWithValue("@id", id);
                 using var reader = cmd.ExecuteReader();
 
@@ -645,7 +613,9 @@ namespace Guardian.Core.Services
                         DailyLimitMinutes = reader.GetInt32(5),
                         Bedtime = TimeSpan.TryParse(reader.GetString(6), out var bt) ? bt : new TimeSpan(21, 30, 0),
                         BedtimeEnabled = reader.GetInt32(7) == 1,
-                        CreatedAt = DateTime.TryParse(reader.GetString(8), out var ca) ? ca : DateTime.Now
+                        CreatedAt = DateTime.TryParse(reader.GetString(8), out var ca) ? ca : DateTime.Now,
+                        ParentId = reader.IsDBNull(9) ? "" : reader.GetString(9),
+                        UserId = reader.IsDBNull(10) ? "" : reader.GetString(10)
                     };
                 }
                 return null;
@@ -661,8 +631,8 @@ namespace Guardian.Core.Services
 
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = @"
-                    INSERT INTO children (id, name, avatar, age, is_active, daily_limit_minutes, bedtime, bedtime_enabled, created_at)
-                    VALUES (@id, @n, @av, @ag, @act, @dlm, @bt, @bte, @ca)
+                    INSERT INTO children (id, name, avatar, age, is_active, daily_limit_minutes, bedtime, bedtime_enabled, created_at, parent_id, user_id)
+                    VALUES (@id, @n, @av, @ag, @act, @dlm, @bt, @bte, @ca, @pid, @uid)
                     ON CONFLICT(id) DO UPDATE SET
                         name = @n,
                         avatar = @av,
@@ -670,7 +640,9 @@ namespace Guardian.Core.Services
                         is_active = @act,
                         daily_limit_minutes = @dlm,
                         bedtime = @bt,
-                        bedtime_enabled = @bte;
+                        bedtime_enabled = @bte,
+                        parent_id = @pid,
+                        user_id = @uid;
                 ";
                 cmd.Parameters.AddWithValue("@id", child.Id);
                 cmd.Parameters.AddWithValue("@n", child.Name);
@@ -681,6 +653,8 @@ namespace Guardian.Core.Services
                 cmd.Parameters.AddWithValue("@bt", child.Bedtime.ToString(@"hh\:mm\:ss"));
                 cmd.Parameters.AddWithValue("@bte", child.BedtimeEnabled ? 1 : 0);
                 cmd.Parameters.AddWithValue("@ca", child.CreatedAt.ToString("o"));
+                cmd.Parameters.AddWithValue("@pid", child.ParentId ?? "");
+                cmd.Parameters.AddWithValue("@uid", child.UserId ?? "");
                 cmd.ExecuteNonQuery();
             }
         }
@@ -1686,8 +1660,8 @@ namespace Guardian.Core.Services
                 conn.Open();
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = @"
-                    INSERT INTO DeviceStatuses (device_id, device_name, child_id, is_online, last_seen, is_guardian_running, is_protected, screen_time_used_seconds, current_app, afk_active)
-                    VALUES (@device_id, @device_name, @child_id, @is_online, @last_seen, @is_guardian_running, @is_protected, @screen_time_used_seconds, @current_app, @afk_active)
+                    INSERT INTO DeviceStatuses (device_id, device_name, child_id, is_online, last_seen, is_guardian_running, is_protected, screen_time_used_seconds, current_app, afk_active, parent_id)
+                    VALUES (@device_id, @device_name, @child_id, @is_online, @last_seen, @is_guardian_running, @is_protected, @screen_time_used_seconds, @current_app, @afk_active, @parent_id)
                     ON CONFLICT(device_id) DO UPDATE SET
                         device_name = @device_name,
                         child_id = @child_id,
@@ -1697,7 +1671,8 @@ namespace Guardian.Core.Services
                         is_protected = @is_protected,
                         screen_time_used_seconds = @screen_time_used_seconds,
                         current_app = @current_app,
-                        afk_active = @afk_active;
+                        afk_active = @afk_active,
+                        parent_id = @parent_id;
                 ";
                 cmd.Parameters.AddWithValue("@device_id", status.DeviceId);
                 cmd.Parameters.AddWithValue("@device_name", status.DeviceName);
@@ -1709,6 +1684,7 @@ namespace Guardian.Core.Services
                 cmd.Parameters.AddWithValue("@screen_time_used_seconds", status.ScreenTimeUsedSeconds);
                 cmd.Parameters.AddWithValue("@current_app", status.CurrentApp ?? "Idle");
                 cmd.Parameters.AddWithValue("@afk_active", status.AfkActive ? 1 : 0);
+                cmd.Parameters.AddWithValue("@parent_id", status.ParentId ?? "");
                 cmd.ExecuteNonQuery();
             }
         }
@@ -1751,19 +1727,193 @@ namespace Guardian.Core.Services
 
         private DeviceStatusRecord ParseDeviceStatusRecord(SqliteDataReader reader)
         {
+            DateTime lastSeen = DateTime.TryParse(reader.GetString(4), System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AdjustToUniversal, out var ls)
+                ? (ls.Kind == DateTimeKind.Unspecified ? DateTime.SpecifyKind(ls, DateTimeKind.Utc) : ls.ToUniversalTime())
+                : DateTime.UtcNow;
+            bool isOnline = (DateTime.UtcNow - lastSeen).TotalSeconds < 30;
+
             return new DeviceStatusRecord
             {
                 DeviceId = reader.GetString(0),
                 DeviceName = reader.GetString(1),
                 ChildId = reader.GetString(2),
-                IsOnline = reader.GetInt32(3) == 1,
-                LastSeen = DateTime.TryParse(reader.GetString(4), out var ls) ? ls : DateTime.UtcNow,
+                IsOnline = isOnline,
+                LastSeen = lastSeen,
                 IsGuardianRunning = reader.GetInt32(5) == 1,
                 IsProtected = reader.GetInt32(6) == 1,
                 ScreenTimeUsedSeconds = reader.GetInt64(7),
                 CurrentApp = reader.IsDBNull(8) ? "Idle" : reader.GetString(8),
-                AfkActive = !reader.IsDBNull(9) && reader.GetInt32(9) == 1
+                AfkActive = !reader.IsDBNull(9) && reader.GetInt32(9) == 1,
+                ParentId = reader.FieldCount > 10 && !reader.IsDBNull(10) ? reader.GetString(10) : ""
             };
+        }
+
+        public UserAccount? GetUserByUsername(string username)
+        {
+            if (string.IsNullOrWhiteSpace(username)) return null;
+            string norm = username.Trim().ToUpperInvariant();
+            lock (_dbLock)
+            {
+                using var conn = new SqliteConnection(_connectionString);
+                conn.Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "SELECT id, username, normalized_username, password_hash, password_salt, role, parent_id, created_at, is_active FROM UserAccounts WHERE normalized_username = @norm;";
+                cmd.Parameters.AddWithValue("@norm", norm);
+                using var reader = cmd.ExecuteReader();
+                if (reader.Read())
+                {
+                    Enum.TryParse<UserRole>(reader.GetString(5), true, out var role);
+                    return new UserAccount
+                    {
+                        Id = reader.GetString(0),
+                        Username = reader.GetString(1),
+                        NormalizedUsername = reader.GetString(2),
+                        PasswordHash = reader.GetString(3),
+                        PasswordSalt = reader.GetString(4),
+                        Role = role,
+                        ParentId = reader.IsDBNull(6) ? "" : reader.GetString(6),
+                        CreatedAt = DateTime.TryParse(reader.GetString(7), out var ca) ? ca : DateTime.UtcNow,
+                        IsActive = reader.GetInt32(8) == 1
+                    };
+                }
+            }
+            return null;
+        }
+
+        public UserAccount? GetUserById(string id)
+        {
+            if (string.IsNullOrWhiteSpace(id)) return null;
+            lock (_dbLock)
+            {
+                using var conn = new SqliteConnection(_connectionString);
+                conn.Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "SELECT id, username, normalized_username, password_hash, password_salt, role, parent_id, created_at, is_active FROM UserAccounts WHERE id = @id;";
+                cmd.Parameters.AddWithValue("@id", id);
+                using var reader = cmd.ExecuteReader();
+                if (reader.Read())
+                {
+                    Enum.TryParse<UserRole>(reader.GetString(5), true, out var role);
+                    return new UserAccount
+                    {
+                        Id = reader.GetString(0),
+                        Username = reader.GetString(1),
+                        NormalizedUsername = reader.GetString(2),
+                        PasswordHash = reader.GetString(3),
+                        PasswordSalt = reader.GetString(4),
+                        Role = role,
+                        ParentId = reader.IsDBNull(6) ? "" : reader.GetString(6),
+                        CreatedAt = DateTime.TryParse(reader.GetString(7), out var ca) ? ca : DateTime.UtcNow,
+                        IsActive = reader.GetInt32(8) == 1
+                    };
+                }
+            }
+            return null;
+        }
+
+        public void SaveUserAccount(UserAccount user)
+        {
+            lock (_dbLock)
+            {
+                using var conn = new SqliteConnection(_connectionString);
+                conn.Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = @"
+                    INSERT INTO UserAccounts (id, username, normalized_username, password_hash, password_salt, role, parent_id, created_at, is_active)
+                    VALUES (@id, @user, @norm, @hash, @salt, @role, @parent, @created, @active)
+                    ON CONFLICT(id) DO UPDATE SET
+                        username = excluded.username,
+                        normalized_username = excluded.normalized_username,
+                        password_hash = excluded.password_hash,
+                        password_salt = excluded.password_salt,
+                        role = excluded.role,
+                        parent_id = excluded.parent_id,
+                        is_active = excluded.is_active;
+                ";
+                cmd.Parameters.AddWithValue("@id", user.Id);
+                cmd.Parameters.AddWithValue("@user", user.Username);
+                cmd.Parameters.AddWithValue("@norm", user.Username.Trim().ToUpperInvariant());
+                cmd.Parameters.AddWithValue("@hash", user.PasswordHash);
+                cmd.Parameters.AddWithValue("@salt", user.PasswordSalt);
+                cmd.Parameters.AddWithValue("@role", user.Role.ToString());
+                cmd.Parameters.AddWithValue("@parent", user.ParentId ?? "");
+                cmd.Parameters.AddWithValue("@created", user.CreatedAt.ToString("o"));
+                cmd.Parameters.AddWithValue("@active", user.IsActive ? 1 : 0);
+                cmd.ExecuteNonQuery();
+            }
+        }
+
+        public List<ChildProfile> GetChildrenForParent(string parentId)
+        {
+            var list = new List<ChildProfile>();
+            if (string.IsNullOrWhiteSpace(parentId)) return list;
+            lock (_dbLock)
+            {
+                using var conn = new SqliteConnection(_connectionString);
+                conn.Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "SELECT id, name, avatar, age, is_active, daily_limit_minutes, bedtime, bedtime_enabled, created_at, parent_id, user_id FROM children WHERE parent_id = @pid ORDER BY name;";
+                cmd.Parameters.AddWithValue("@pid", parentId);
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    list.Add(new ChildProfile
+                    {
+                        Id = reader.GetString(0),
+                        Name = reader.GetString(1),
+                        Avatar = reader.GetString(2),
+                        Age = reader.GetInt32(3),
+                        IsActive = reader.GetInt32(4) == 1,
+                        DailyLimitMinutes = reader.GetInt32(5),
+                        Bedtime = TimeSpan.TryParse(reader.GetString(6), out var bt) ? bt : new TimeSpan(21, 30, 0),
+                        BedtimeEnabled = reader.GetInt32(7) == 1,
+                        CreatedAt = DateTime.TryParse(reader.GetString(8), out var ca) ? ca : DateTime.Now,
+                        ParentId = reader.IsDBNull(9) ? "" : reader.GetString(9),
+                        UserId = reader.IsDBNull(10) ? "" : reader.GetString(10)
+                    });
+                }
+            }
+            return list;
+        }
+
+        public List<DeviceStatusRecord> GetDevicesForParent(string parentId)
+        {
+            var list = new List<DeviceStatusRecord>();
+            if (string.IsNullOrWhiteSpace(parentId)) return list;
+            lock (_dbLock)
+            {
+                using var conn = new SqliteConnection(_connectionString);
+                conn.Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "SELECT device_id, device_name, child_id, is_online, last_seen, is_guardian_running, is_protected, screen_time_used_seconds, current_app, afk_active, parent_id FROM DeviceStatuses WHERE parent_id = @pid OR child_id IN (SELECT id FROM children WHERE parent_id = @pid);";
+                cmd.Parameters.AddWithValue("@pid", parentId);
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    list.Add(ParseDeviceStatusRecord(reader));
+                }
+            }
+            return list;
+        }
+
+        public List<DeviceStatusRecord> GetDevicesForChild(string childId)
+        {
+            var list = new List<DeviceStatusRecord>();
+            if (string.IsNullOrWhiteSpace(childId)) return list;
+            lock (_dbLock)
+            {
+                using var conn = new SqliteConnection(_connectionString);
+                conn.Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "SELECT device_id, device_name, child_id, is_online, last_seen, is_guardian_running, is_protected, screen_time_used_seconds, current_app, afk_active, parent_id FROM DeviceStatuses WHERE child_id = @cid;";
+                cmd.Parameters.AddWithValue("@cid", childId);
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    list.Add(ParseDeviceStatusRecord(reader));
+                }
+            }
+            return list;
         }
     }
 }

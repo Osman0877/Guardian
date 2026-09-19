@@ -639,6 +639,125 @@ namespace Guardian.Tests
             Assert.NotNull(appRule);
             Assert.True(appRule.IsBlocked);
         }
+
+        [Fact]
+        public void Test28_UserAccount_Registration_PBKDF2_And_Verification()
+        {
+            var user = _auth.RegisterUser("MasterParent", "SecurePass123!", UserRole.Parent);
+            Assert.NotNull(user);
+            Assert.Equal("MASTERPARENT", user.NormalizedUsername);
+            Assert.NotEmpty(user.PasswordHash);
+            Assert.NotEmpty(user.PasswordSalt);
+            Assert.NotEqual("SecurePass123!", user.PasswordHash); // Password must be hashed
+
+            var verified = _auth.VerifyUserCredentials("masterparent", "SecurePass123!");
+            Assert.NotNull(verified);
+            Assert.Equal(user.Id, verified.Id);
+
+            var wrongPass = _auth.VerifyUserCredentials("masterparent", "WrongPassword");
+            Assert.Null(wrongPass);
+
+            var wrongUser = _auth.VerifyUserCredentials("NonExistentUser", "SecurePass123!");
+            Assert.Null(wrongUser);
+        }
+
+        [Fact]
+        public void Test29_ParentChild_Ownership_DataIsolation()
+        {
+            var parentA = _auth.RegisterUser("ParentA", "PassA123!", UserRole.Parent);
+            var parentB = _auth.RegisterUser("ParentB", "PassB123!", UserRole.Parent);
+
+            var childA = new ChildProfile { Id = "child_a", ParentId = parentA.Id, Name = "ChildA" };
+            var childB = new ChildProfile { Id = "child_b", ParentId = parentB.Id, Name = "ChildB" };
+
+            _db.SaveChild(childA);
+            _db.SaveChild(childB);
+
+            var parentAChildren = _db.GetChildrenForParent(parentA.Id);
+            Assert.Single(parentAChildren);
+            Assert.Equal("ChildA", parentAChildren[0].Name);
+
+            var parentBChildren = _db.GetChildrenForParent(parentB.Id);
+            Assert.Single(parentBChildren);
+            Assert.Equal("ChildB", parentBChildren[0].Name);
+        }
+
+        [Fact]
+        public void Test30_DeviceStatus_DynamicOnlineStatus_Heartbeat_Expiry()
+        {
+            var devRecent = new DeviceStatusRecord
+            {
+                DeviceId = "DEV_ONLINE_01",
+                DeviceName = "Online PC",
+                ParentId = "parent_01",
+                LastSeen = DateTime.UtcNow
+            };
+            _db.SaveDeviceStatus(devRecent);
+
+            var devStale = new DeviceStatusRecord
+            {
+                DeviceId = "DEV_OFFLINE_01",
+                DeviceName = "Offline PC",
+                ParentId = "parent_01",
+                LastSeen = DateTime.UtcNow.AddMinutes(-5) // 5 minutes ago
+            };
+            _db.SaveDeviceStatus(devStale);
+
+            var parentDevices = _db.GetDevicesForParent("parent_01");
+            var onlineDev = parentDevices.Find(d => d.DeviceId == "DEV_ONLINE_01");
+            var offlineDev = parentDevices.Find(d => d.DeviceId == "DEV_OFFLINE_01");
+
+            Assert.NotNull(onlineDev);
+            Assert.True(onlineDev.IsOnline);
+
+            Assert.NotNull(offlineDev);
+            Assert.False(offlineDev.IsOnline);
+        }
+
+        [Fact]
+        public void Test31_PersistentDeviceId_PreservedOnRestart()
+        {
+            using var usageTracker1 = new UsageTrackingService(_db);
+            using var enforcement1 = new EnforcementService(_db, usageTracker1);
+            using var syncService1 = new DeviceSyncService(_db, usageTracker1, enforcement1);
+
+            string devId1 = syncService1.DeviceId;
+            Assert.NotEmpty(devId1);
+
+            syncService1.Stop();
+
+            using var usageTracker2 = new UsageTrackingService(_db);
+            using var enforcement2 = new EnforcementService(_db, usageTracker2);
+            using var syncService2 = new DeviceSyncService(_db, usageTracker2, enforcement2);
+
+            string devId2 = syncService2.DeviceId;
+            Assert.Equal(devId1, devId2); // Must preserve persistent device ID
+        }
+
+        [Fact]
+        public async System.Threading.Tasks.Task Test32_RemoteCommand_Expiration_Validation()
+        {
+            using var usageTracker = new UsageTrackingService(_db);
+            using var enforcement = new EnforcementService(_db, usageTracker);
+            using var syncService = new DeviceSyncService(_db, usageTracker, enforcement);
+
+            var expiredCmd = new RemoteCommand
+            {
+                Id = Guid.NewGuid().ToString(),
+                ChildId = "default",
+                DeviceId = syncService.DeviceId,
+                CommandType = RemoteCommandType.LockDevice,
+                Status = CommandStatus.Pending,
+                CreatedAt = DateTime.UtcNow.AddHours(-48),
+                ExpiresAt = DateTime.UtcNow.AddHours(-24) // Expired 24 hours ago
+            };
+
+            await syncService.ExecuteCommandLocallyAsync(expiredCmd);
+
+            var checkedCmd = _db.GetRemoteCommand(expiredCmd.Id);
+            Assert.NotNull(checkedCmd);
+            Assert.Equal(CommandStatus.Expired, checkedCmd.Status);
+        }
     }
 }
 

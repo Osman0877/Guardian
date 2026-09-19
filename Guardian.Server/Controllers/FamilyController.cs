@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Guardian.Core.Models;
@@ -21,45 +22,29 @@ namespace Guardian.Server.Controllers
         [HttpGet("children")]
         public IActionResult GetChildren()
         {
-            var children = _db.GetAllChildren();
-            if (children.Count == 0)
+            string parentId = GetAuthenticatedParentId();
+            if (string.IsNullOrEmpty(parentId))
             {
-                // Return default Alex child if DB is clean
-                children.Add(new ChildProfile
-                {
-                    Id = "default",
-                    Name = "Alex",
-                    DailyLimitMinutes = 120,
-                    IsActive = true
-                });
+                var allChildren = _db.GetAllChildren();
+                return Ok(allChildren);
             }
+
+            var children = _db.GetChildrenForParent(parentId);
             return Ok(children);
         }
 
         [HttpGet("devices")]
         public IActionResult GetDevices()
         {
-            var statuses = _db.GetAllDeviceStatuses();
-            if (statuses.Count == 0)
+            string parentId = GetAuthenticatedParentId();
+            if (string.IsNullOrEmpty(parentId))
             {
-                // Populate default device status
-                var defaultDevice = new DeviceStatusRecord
-                {
-                    DeviceId = Environment.MachineName,
-                    DeviceName = $"{Environment.MachineName} (Gaming PC)",
-                    ChildId = "default",
-                    IsOnline = true,
-                    LastSeen = DateTime.UtcNow,
-                    IsGuardianRunning = true,
-                    IsProtected = true,
-                    ScreenTimeUsedSeconds = 5040, // 1h 24m
-                    CurrentApp = "Roblox",
-                    AfkActive = false
-                };
-                _db.SaveDeviceStatus(defaultDevice);
-                statuses.Add(defaultDevice);
+                var allDevices = _db.GetAllDeviceStatuses();
+                return Ok(allDevices);
             }
-            return Ok(statuses);
+
+            var devices = _db.GetDevicesForParent(parentId);
+            return Ok(devices);
         }
 
         [HttpGet("app-rules")]
@@ -77,10 +62,35 @@ namespace Guardian.Server.Controllers
         }
 
         [HttpGet("usage")]
-        public IActionResult GetUsage([FromQuery] string? childId = "default")
+        public IActionResult GetUsage([FromQuery] string? childId)
         {
-            var usage = _db.GetOrCreateDailyUsage(DateTime.Today, childId ?? "default");
+            if (string.IsNullOrWhiteSpace(childId))
+            {
+                string parentId = GetAuthenticatedParentId();
+                var children = _db.GetChildrenForParent(parentId);
+                if (children.Count > 0) childId = children[0].Id;
+            }
+
+            if (string.IsNullOrWhiteSpace(childId))
+            {
+                return Ok(new DailyUsageRecord { DateString = DateTime.Today.ToString("yyyy-MM-dd"), ChildId = "" });
+            }
+
+            var usage = _db.GetOrCreateDailyUsage(DateTime.Today, childId);
             return Ok(usage);
+        }
+
+        private string GetAuthenticatedParentId()
+        {
+            if (User.Identity?.IsAuthenticated == true)
+            {
+                var parentClaim = User.FindFirst("ParentId")?.Value;
+                if (!string.IsNullOrEmpty(parentClaim)) return parentClaim;
+
+                var idClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (!string.IsNullOrEmpty(idClaim)) return idClaim;
+            }
+            return string.Empty;
         }
     }
 }

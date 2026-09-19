@@ -16,6 +16,10 @@ namespace Guardian.Core.Services
         bool AuthenticateAndStartSession(string password);
         void EndSession();
         bool IsActionAuthorized(string? explicitPassword = null);
+
+        // Multi-User Database Authentication
+        UserAccount? VerifyUserCredentials(string username, string password);
+        UserAccount RegisterUser(string username, string password, UserRole role = UserRole.Parent, string parentId = "");
     }
 
     public class AuthenticationService : IAuthenticationService
@@ -38,7 +42,6 @@ namespace Guardian.Core.Services
             _db = db;
             _settings = _db.LoadSettings();
 
-            // Initialize default password "1111" if not yet created
             if (string.IsNullOrEmpty(_settings.PasswordHash) || string.IsNullOrEmpty(_settings.PasswordSalt))
             {
                 InitializeDefaultPassword();
@@ -56,6 +59,67 @@ namespace Guardian.Core.Services
 
             _db.SaveSettings(_settings);
             Logger.Info("Initialized default administrator password ('1111').");
+        }
+
+        public UserAccount? VerifyUserCredentials(string username, string password)
+        {
+            if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
+            {
+                return null;
+            }
+
+            var user = _db.GetUserByUsername(username);
+            if (user == null || !user.IsActive)
+            {
+                return null;
+            }
+
+            try
+            {
+                byte[] salt = Convert.FromBase64String(user.PasswordSalt);
+                byte[] expectedHash = Convert.FromBase64String(user.PasswordHash);
+                byte[] actualHash = HashPassword(password, salt);
+
+                if (CryptographicOperations.FixedTimeEquals(actualHash, expectedHash))
+                {
+                    return user;
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"Error verifying user password for {username}", ex);
+            }
+
+            return null;
+        }
+
+        public UserAccount RegisterUser(string username, string password, UserRole role = UserRole.Parent, string parentId = "")
+        {
+            if (string.IsNullOrWhiteSpace(username)) throw new ArgumentException("Username is required.");
+            if (string.IsNullOrWhiteSpace(password) || password.Length < 4) throw new ArgumentException("Password must be at least 4 characters long.");
+
+            var existing = _db.GetUserByUsername(username);
+            if (existing != null) throw new InvalidOperationException($"Username '{username}' is already taken.");
+
+            byte[] salt = GenerateSalt();
+            byte[] hash = HashPassword(password, salt);
+
+            var user = new UserAccount
+            {
+                Id = Guid.NewGuid().ToString(),
+                Username = username.Trim(),
+                NormalizedUsername = username.Trim().ToUpperInvariant(),
+                PasswordHash = Convert.ToBase64String(hash),
+                PasswordSalt = Convert.ToBase64String(salt),
+                Role = role,
+                ParentId = parentId,
+                CreatedAt = DateTime.UtcNow,
+                IsActive = true
+            };
+
+            _db.SaveUserAccount(user);
+            Logger.Info($"Registered new {role} user: '{username.Trim()}' (ID: {user.Id}).");
+            return user;
         }
 
         public bool VerifyPassword(string password)
@@ -99,13 +163,11 @@ namespace Guardian.Core.Services
 
         public bool IsActionAuthorized(string? explicitPassword = null)
         {
-            // If an explicit password was passed, verify it directly
             if (!string.IsNullOrEmpty(explicitPassword))
             {
                 return VerifyPassword(explicitPassword);
             }
 
-            // Otherwise, check if an active parent authenticated session is running
             return HasAuthenticatedSession;
         }
 
@@ -135,7 +197,6 @@ namespace Guardian.Core.Services
             _db.SaveSettings(_settings);
             Logger.Info("Parent password successfully updated.");
 
-            // Refresh session
             int timeoutMins = Math.Max(5, _settings.SessionTimeoutMinutes);
             _sessionExpiry = DateTime.Now.AddMinutes(timeoutMins);
 

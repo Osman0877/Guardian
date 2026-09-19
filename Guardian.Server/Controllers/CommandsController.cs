@@ -13,7 +13,7 @@ namespace Guardian.Server.Controllers
     public class CreateCommandDto
     {
         public string ChildId { get; set; } = "default";
-        public string DeviceId { get; set; } = Environment.MachineName;
+        public string DeviceId { get; set; } = string.Empty;
         public string CommandType { get; set; } = "LockDevice";
         public string PayloadJson { get; set; } = "{}";
     }
@@ -46,34 +46,37 @@ namespace Guardian.Server.Controllers
                 return BadRequest(new { success = false, message = $"Invalid command type: {dto.CommandType}" });
             }
 
+            if (string.IsNullOrWhiteSpace(dto.DeviceId))
+            {
+                return BadRequest(new { success = false, message = "Target DeviceId is required." });
+            }
+
             var cmd = new RemoteCommand
             {
                 Id = Guid.NewGuid().ToString(),
                 ChildId = dto.ChildId,
-                DeviceId = string.IsNullOrWhiteSpace(dto.DeviceId) ? Environment.MachineName : dto.DeviceId,
+                DeviceId = dto.DeviceId,
                 CommandType = type,
                 PayloadJson = dto.PayloadJson ?? "{}",
                 Status = CommandStatus.Pending,
                 CreatedBy = "Parent Web Dashboard",
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.UtcNow,
+                ExpiresAt = DateTime.UtcNow.AddHours(24)
             };
 
-            // Save to authoritative database
             _db.SaveRemoteCommand(cmd);
 
-            // Notify SignalR hub connected device(s)
-            await _hubContext.Clients.Group("all_devices").SendAsync("ReceiveRemoteCommand", cmd);
+            // Direct device group routing ONLY (No global broadcasting)
             await _hubContext.Clients.Group($"device_{cmd.DeviceId}").SendAsync("ReceiveRemoteCommand", cmd);
 
-            // Log event in audit log
-            _db.LogIncident("REMOTE_COMMAND_SENT", cmd.CommandType.ToString(), $"Remote command [{cmd.CommandType}] queued for device {cmd.DeviceId}.");
+            _db.LogIncident("REMOTE_COMMAND_SENT", cmd.CommandType.ToString(), $"Remote command [{cmd.CommandType}] queued specifically for device {cmd.DeviceId}.");
 
             return Ok(new
             {
                 success = true,
                 commandId = cmd.Id,
                 status = cmd.Status.ToString(),
-                message = $"Remote command {cmd.CommandType} successfully created and sent to backend queue."
+                message = $"Remote command {cmd.CommandType} successfully queued for device {cmd.DeviceId}."
             });
         }
 
@@ -87,8 +90,11 @@ namespace Guardian.Server.Controllers
         [HttpGet("/api/devices/commands/pending")]
         public IActionResult GetPendingCommands([FromQuery] string deviceId)
         {
-            string targetDevice = string.IsNullOrWhiteSpace(deviceId) ? Environment.MachineName : deviceId;
-            var list = _db.GetPendingCommandsForDevice(targetDevice);
+            if (string.IsNullOrWhiteSpace(deviceId))
+            {
+                return BadRequest(new { success = false, message = "deviceId is required." });
+            }
+            var list = _db.GetPendingCommandsForDevice(deviceId);
             return Ok(list);
         }
 
@@ -107,7 +113,7 @@ namespace Guardian.Server.Controllers
 
             _db.UpdateCommandStatus(dto.CommandId, status, dto.ErrorMessage);
 
-            // Notify parents over WebSockets
+            // Notify parent dashboard WebSockets
             await _hubContext.Clients.Group("all_parents").SendAsync("CommandStatusChanged", new
             {
                 commandId = dto.CommandId,
@@ -131,7 +137,7 @@ namespace Guardian.Server.Controllers
 
             _db.SaveDeviceStatus(status);
 
-            // Broadcast to parent dashboard WebSockets
+            // Broadcast real-time status update to parent dashboard
             await _hubContext.Clients.Group("all_parents").SendAsync("DeviceStatusUpdated", status);
 
             return Ok(new { success = true });

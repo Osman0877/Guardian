@@ -40,9 +40,24 @@ namespace Guardian.Core.Models
         Success
     }
 
+    public class UserAccount
+    {
+        public string Id { get; set; } = Guid.NewGuid().ToString();
+        public string Username { get; set; } = string.Empty;
+        public string NormalizedUsername { get; set; } = string.Empty;
+        public string PasswordHash { get; set; } = string.Empty;
+        public string PasswordSalt { get; set; } = string.Empty;
+        public UserRole Role { get; set; } = UserRole.Parent;
+        public string ParentId { get; set; } = string.Empty;
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public bool IsActive { get; set; } = true;
+    }
+
     public class ChildProfile
     {
         public string Id { get; set; } = Guid.NewGuid().ToString();
+        public string ParentId { get; set; } = string.Empty;
+        public string UserId { get; set; } = string.Empty;
         public string Name { get; set; } = "Child";
         public string Avatar { get; set; } = "👦";
         public int Age { get; set; } = 10;
@@ -186,6 +201,7 @@ namespace Guardian.Core.Models
 
     public class GuardianSettings
     {
+        public string DeviceId { get; set; } = string.Empty;
         public UserRole ActiveRole { get; set; } = UserRole.NotSelected;
         public string ActiveChildId { get; set; } = "default";
         public string PasswordHash { get; set; } = string.Empty;
@@ -213,15 +229,22 @@ namespace Guardian.Core.Models
     public enum RemoteCommandType
     {
         LockDevice,
+        UnlockDevice,
         BlockApp,
+        BlockApplication,
         UnblockApp,
+        UnblockApplication,
         BlockWebsite,
         UnblockWebsite,
         SetDailyLimit,
         GrantBonusTime,
+        AddTime,
         RequestDecision,
         ActivateAfk,
-        DeactivateAfk
+        StartAfk,
+        DeactivateAfk,
+        EndAfk,
+        RefreshPolicy
     }
 
     public class RemoteCommand
@@ -234,6 +257,7 @@ namespace Guardian.Core.Models
         public CommandStatus Status { get; set; } = CommandStatus.Pending;
         public string CreatedBy { get; set; } = "Parent";
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime ExpiresAt { get; set; } = DateTime.UtcNow.AddHours(24);
         public DateTime? ExecutedAt { get; set; } = null;
         public string ErrorMessage { get; set; } = string.Empty;
     }
@@ -242,6 +266,7 @@ namespace Guardian.Core.Models
     {
         public string DeviceId { get; set; } = Environment.MachineName;
         public string DeviceName { get; set; } = Environment.MachineName;
+        public string ParentId { get; set; } = string.Empty;
         public string ChildId { get; set; } = "default";
         public bool IsOnline { get; set; } = true;
         public DateTime LastSeen { get; set; } = DateTime.UtcNow;

@@ -16,6 +16,9 @@ namespace Guardian.Core.Win32
         [DllImport("user32.dll")]
         public static extern bool GetLastInputInfo(ref LASTINPUTINFO plii);
 
+        [DllImport("user32.dll", SetLastError = true)]
+        public static extern bool LockWorkStation();
+
         [DllImport("user32.dll")]
         public static extern IntPtr GetForegroundWindow();
 
@@ -75,6 +78,25 @@ namespace Guardian.Core.Win32
             }
 
             return string.Empty;
+        }
+
+        public static string GetActiveProcessName()
+        {
+            try
+            {
+                IntPtr hwnd = GetForegroundWindow();
+                if (hwnd == IntPtr.Zero) return string.Empty;
+
+                GetWindowThreadProcessId(hwnd, out uint pid);
+                if (pid == 0) return string.Empty;
+
+                using var proc = System.Diagnostics.Process.GetProcessById((int)pid);
+                return proc.ProcessName;
+            }
+            catch
+            {
+                return string.Empty;
+            }
         }
 
         // Win32 Low-Level Keyboard Hook Declarations for LockScreen Security

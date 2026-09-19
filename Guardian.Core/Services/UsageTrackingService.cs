@@ -43,6 +43,7 @@ namespace Guardian.Core.Services
         void GrantBonusMinutes(int minutes);
         void UnlockDeviceForToday();
         void LockDeviceManually(string reason = "Device locked by parent");
+        void UnlockDeviceManually(string reason = "Device unlocked by parent");
         bool ActivateAfkMode(string password, int durationMinutes = 0);
         bool DeactivateAfkMode(string password);
         void ForceDeactivateAfkMode(string reason = "AFK Mode ended");
@@ -371,6 +372,28 @@ namespace Guardian.Core.Services
             Logger.Info($"Device manually locked: {reason}");
             OnUsageUpdated?.Invoke();
             OnDeviceLimitReached?.Invoke();
+        }
+
+        public void UnlockDeviceManually(string reason = "Device unlocked by parent")
+        {
+            lock (_stateLock)
+            {
+                _currentRecord.IsDeviceLocked = false;
+                _currentRecord.ParentUnlockedForToday = true;
+                _currentRecord.LockReason = string.Empty;
+                _db.SaveDailyUsage(_currentRecord);
+            }
+
+            _db.SaveNotification(new GuardianNotification
+            {
+                Title = "Device Unlocked",
+                Message = reason,
+                Severity = NotificationSeverity.Success
+            });
+
+            _db.LogIncident("DEVICE_UNLOCKED_MANUAL", "Parent", reason);
+            Logger.Info($"Device manually unlocked: {reason}");
+            OnUsageUpdated?.Invoke();
         }
 
         public bool ActivateAfkMode(string password, int durationMinutes = 0)

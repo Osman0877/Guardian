@@ -5,7 +5,9 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.SignalR.Client;
 using Guardian.Core.Models;
+using Guardian.Core.Win32;
 
 namespace Guardian.Core.Services
 {
@@ -13,6 +15,7 @@ namespace Guardian.Core.Services
     {
         bool IsConnected { get; }
         string ServerUrl { get; set; }
+        string DeviceId { get; }
         event Action<RemoteCommand>? OnCommandReceived;
         event Action<RemoteCommand>? OnCommandProcessed;
 
@@ -31,9 +34,12 @@ namespace Guardian.Core.Services
 
         private CancellationTokenSource? _cts;
         private Task? _syncLoopTask;
+        private HubConnection? _hubConnection;
+        private string _deviceId = string.Empty;
 
         public bool IsConnected { get; private set; }
-        public string ServerUrl { get; set; } = "https://localhost:7185";
+        public string ServerUrl { get; set; } = "https://guardian-parent-server.onrender.com";
+        public string DeviceId => _deviceId;
 
         public event Action<RemoteCommand>? OnCommandReceived;
         public event Action<RemoteCommand>? OnCommandProcessed;
@@ -52,6 +58,19 @@ namespace Guardian.Core.Services
             {
                 Timeout = TimeSpan.FromSeconds(5)
             };
+
+            _deviceId = GetOrCreatePersistentDeviceId();
+        }
+
+        private string GetOrCreatePersistentDeviceId()
+        {
+            var settings = _db.LoadSettings();
+            if (string.IsNullOrWhiteSpace(settings.DeviceId))
+            {
+                settings.DeviceId = $"gdev_{Guid.NewGuid().ToString("N").Substring(0, 12)}";
+                _db.SaveSettings(settings);
+            }
+            return settings.DeviceId;
         }
 
         public void Start(string? serverUrl = null)
@@ -65,7 +84,9 @@ namespace Guardian.Core.Services
 
             _cts = new CancellationTokenSource();
             _syncLoopTask = Task.Run(() => SyncLoopAsync(_cts.Token));
-            Logger.Info($"DeviceSyncService started with ServerUrl: {ServerUrl}");
+            InitSignalRConnectionAsync().Forget();
+
+            Logger.Info($"DeviceSyncService started with Persistent Device ID: {_deviceId}, ServerUrl: {ServerUrl}");
         }
 
         public void Stop()
@@ -78,7 +99,42 @@ namespace Guardian.Core.Services
                 _cts = null;
                 _syncLoopTask = null;
             }
+
+            if (_hubConnection != null)
+            {
+                try { _hubConnection.StopAsync().Wait(1000); } catch { }
+                _hubConnection.DisposeAsync().AsTask().Wait(1000);
+                _hubConnection = null;
+            }
+
             Logger.Info("DeviceSyncService stopped.");
+        }
+
+        private async Task InitSignalRConnectionAsync()
+        {
+            try
+            {
+                string hubUrl = $"{ServerUrl.TrimEnd('/')}/hubs/guardian";
+                _hubConnection = new HubConnectionBuilder()
+                    .WithUrl(hubUrl)
+                    .WithAutomaticReconnect()
+                    .Build();
+
+                _hubConnection.On<RemoteCommand>("ReceiveRemoteCommand", async (command) =>
+                {
+                    Logger.Info($"SignalR Push received RemoteCommand [{command.CommandType}] ID: {command.Id}");
+                    await ExecuteCommandLocallyAsync(command);
+                });
+
+                await _hubConnection.StartAsync();
+                await _hubConnection.InvokeAsync("RegisterDevice", _deviceId);
+                IsConnected = true;
+                Logger.Info($"SignalR connected and registered device: {_deviceId}");
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn($"SignalR connection deferred: {ex.Message}");
+            }
         }
 
         private async Task SyncLoopAsync(CancellationToken token)
@@ -87,10 +143,15 @@ namespace Guardian.Core.Services
             {
                 try
                 {
-                    // 1. Local device status creation & DB update
+                    string currentApp = NativeMethods.GetActiveProcessName();
+                    if (string.IsNullOrEmpty(currentApp))
+                    {
+                        currentApp = string.IsNullOrEmpty(_usageTracker.ActiveProcessName) ? "Desktop / Idle" : _usageTracker.ActiveProcessName;
+                    }
+
                     var status = new DeviceStatusRecord
                     {
-                        DeviceId = Environment.MachineName,
+                        DeviceId = _deviceId,
                         DeviceName = Environment.MachineName,
                         ChildId = _usageTracker.ActiveChildId,
                         IsOnline = true,
@@ -98,16 +159,13 @@ namespace Guardian.Core.Services
                         IsGuardianRunning = true,
                         IsProtected = _enforcement.IsEnforcementActive,
                         ScreenTimeUsedSeconds = _usageTracker.TotalDeviceSecondsToday,
-                        CurrentApp = string.IsNullOrEmpty(_usageTracker.ActiveProcessName) ? "Desktop / Idle" : _usageTracker.ActiveProcessName,
+                        CurrentApp = currentApp,
                         AfkActive = _usageTracker.IsAfkModeActive
                     };
 
                     _db.SaveDeviceStatus(status);
 
-                    // 2. Transmit heartbeat to server if available
                     await SendHeartbeatAsync(status, token);
-
-                    // 3. Fetch & execute pending remote commands
                     await ProcessPendingCommandsAsync(token);
                 }
                 catch (Exception ex)
@@ -136,21 +194,20 @@ namespace Guardian.Core.Services
 
         private async Task ProcessPendingCommandsAsync(CancellationToken token)
         {
-            // A. Check local DB pending commands
-            var localPending = _db.GetPendingCommandsForDevice(Environment.MachineName);
+            var localPending = _db.GetPendingCommandsForDevice(_deviceId);
 
-            // B. Check remote server pending commands if connected
             if (IsConnected)
             {
                 try
                 {
-                    string url = $"{ServerUrl.TrimEnd('/')}/api/devices/commands/pending?deviceId={Uri.EscapeDataString(Environment.MachineName)}";
+                    string url = $"{ServerUrl.TrimEnd('/')}/api/devices/commands/pending?deviceId={Uri.EscapeDataString(_deviceId)}";
                     var remoteCommands = await _httpClient.GetFromJsonAsync<List<RemoteCommand>>(url, cancellationToken: token);
                     if (remoteCommands != null)
                     {
                         foreach (var cmd in remoteCommands)
                         {
-                            if (!_db.GetRemoteCommand(cmd.Id)?.Status.Equals(CommandStatus.Executed) ?? true)
+                            var existing = _db.GetRemoteCommand(cmd.Id);
+                            if (existing == null || existing.Status == CommandStatus.Pending || existing.Status == CommandStatus.Delivered)
                             {
                                 _db.SaveRemoteCommand(cmd);
                                 if (!localPending.Exists(c => c.Id == cmd.Id))
@@ -167,7 +224,6 @@ namespace Guardian.Core.Services
                 }
             }
 
-            // C. Execute each command
             foreach (var cmd in localPending)
             {
                 if (token.IsCancellationRequested) break;
@@ -179,6 +235,17 @@ namespace Guardian.Core.Services
         {
             try
             {
+                if (command.ExpiresAt != default && DateTime.UtcNow > command.ExpiresAt)
+                {
+                    Logger.Warn($"RemoteCommand ID {command.Id} has EXPIRED ({command.ExpiresAt}). Skipping execution.");
+                    command.Status = CommandStatus.Expired;
+                    command.ErrorMessage = "Command expired before execution.";
+                    _db.SaveRemoteCommand(command);
+                    _db.UpdateCommandStatus(command.Id, CommandStatus.Expired, command.ErrorMessage);
+                    NotifyCommandStatusToServer(command.Id, CommandStatus.Expired, command.ErrorMessage);
+                    return;
+                }
+
                 Logger.Info($"Processing RemoteCommand [{command.CommandType}] ID: {command.Id}");
                 OnCommandReceived?.Invoke(command);
 
@@ -193,9 +260,15 @@ namespace Guardian.Core.Services
                 {
                     case RemoteCommandType.LockDevice:
                         _usageTracker.LockDeviceManually("Device remotely locked by Parent Dashboard");
+                        try { NativeMethods.LockWorkStation(); } catch { }
+                        break;
+
+                    case RemoteCommandType.UnlockDevice:
+                        _usageTracker.UnlockDeviceManually("Device remotely unlocked by Parent Dashboard");
                         break;
 
                     case RemoteCommandType.BlockApp:
+                    case RemoteCommandType.BlockApplication:
                         {
                             string? procName = GetJsonStringProp(root, "processName", "ProcessName", "process_name");
                             string? dispName = GetJsonStringProp(root, "displayName", "DisplayName", "display_name") ?? procName;
@@ -214,6 +287,7 @@ namespace Guardian.Core.Services
                         break;
 
                     case RemoteCommandType.UnblockApp:
+                    case RemoteCommandType.UnblockApplication:
                         {
                             string? procName = GetJsonStringProp(root, "processName", "ProcessName", "process_name");
                             if (!string.IsNullOrWhiteSpace(procName))
@@ -253,7 +327,7 @@ namespace Guardian.Core.Services
                     case RemoteCommandType.SetDailyLimit:
                         if (root.TryGetProperty("dailyLimitMinutes", out var limitProp) && limitProp.TryGetInt32(out int limitMins))
                         {
-                            var child = _db.GetChild(command.ChildId) ?? new ChildProfile { Id = command.ChildId, Name = "Alex" };
+                            var child = _db.GetChild(command.ChildId) ?? new ChildProfile { Id = command.ChildId, Name = "Child" };
                             child.DailyLimitMinutes = limitMins;
                             _db.SaveChild(child);
                             _usageTracker.RefreshSchedule();
@@ -261,36 +335,15 @@ namespace Guardian.Core.Services
                         break;
 
                     case RemoteCommandType.GrantBonusTime:
-                        if (root.TryGetProperty("minutes", out var minProp) && minProp.TryGetInt32(out int bonusMins))
+                    case RemoteCommandType.AddTime:
+                        if ((root.TryGetProperty("minutes", out var minProp) || root.TryGetProperty("RequestedMinutes", out minProp)) && minProp.TryGetInt32(out int bonusMins))
                         {
                             _usageTracker.GrantBonusMinutes(bonusMins);
                         }
                         break;
 
-                    case RemoteCommandType.RequestDecision:
-                        if (root.TryGetProperty("requestId", out var reqIdProp))
-                        {
-                            string reqId = reqIdProp.GetString() ?? "";
-                            bool approved = root.TryGetProperty("approved", out var appProp) && appProp.GetBoolean();
-                            int addMins = root.TryGetProperty("minutes", out var addMinsProp) && addMinsProp.TryGetInt32(out int m) ? m : 30;
-
-                            var requests = _db.GetRequests();
-                            var targetReq = requests.Find(r => r.Id == reqId);
-                            if (targetReq != null)
-                            {
-                                targetReq.Status = approved ? RequestStatus.Approved : RequestStatus.Denied;
-                                targetReq.RespondedAt = DateTime.Now;
-                                _db.SaveRequest(targetReq);
-
-                                if (approved)
-                                {
-                                    _usageTracker.GrantBonusMinutes(addMins);
-                                }
-                            }
-                        }
-                        break;
-
                     case RemoteCommandType.ActivateAfk:
+                    case RemoteCommandType.StartAfk:
                         int duration = root.TryGetProperty("durationMinutes", out var durProp) && durProp.TryGetInt32(out int d) ? d : 60;
                         _db.SaveAfkState(new AfkState
                         {
@@ -301,7 +354,7 @@ namespace Guardian.Core.Services
                         });
                         _db.SaveAfkSession(new AfkSessionRecord
                         {
-                            StartTimestamp = DateTime.Now,
+                            StartTimestamp = DateTime.UtcNow,
                             ActivationMethod = "Remote Parent Website",
                             ActivatedBy = "Parent Remote",
                             EndReason = "Active"
@@ -309,7 +362,13 @@ namespace Guardian.Core.Services
                         break;
 
                     case RemoteCommandType.DeactivateAfk:
+                    case RemoteCommandType.EndAfk:
                         _usageTracker.ForceDeactivateAfkMode("Parent Remote Disable");
+                        break;
+
+                    case RemoteCommandType.RefreshPolicy:
+                        _enforcement.RefreshRules();
+                        _usageTracker.RefreshSchedule();
                         break;
                 }
 
@@ -388,6 +447,20 @@ namespace Guardian.Core.Services
         {
             Stop();
             _httpClient.Dispose();
+        }
+    }
+
+    internal static class TaskExtensions
+    {
+        public static void Forget(this Task task)
+        {
+            task.ContinueWith(t =>
+            {
+                if (t.IsFaulted && t.Exception != null)
+                {
+                    Logger.Error("Background task faulted", t.Exception);
+                }
+            }, TaskContinuationOptions.OnlyOnFaulted);
         }
     }
 }
