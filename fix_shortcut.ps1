@@ -31,4 +31,9 @@ $s2.WorkingDirectory = $serverWorkingDir
 $s2.Description = "Start Guardian Parent Web Dashboard Server"
 $s2.Save()
 
+# 3. Public Web Dashboard Shortcut (URL)
+$webUrlShortcut = Join-Path $desktopPath "Guardian Parent Web Dashboard.url"
+$urlContent = "[InternetShortcut]`r`nURL=https://guardian-parent-server.onrender.com`r`nIDList=`r`nIconFile=C:\Windows\System32\shell32.dll`r`nIconIndex=14"
+Set-Content -Path $webUrlShortcut -Value $urlContent -Force
+
 Write-Host "All desktop shortcuts created successfully!"
